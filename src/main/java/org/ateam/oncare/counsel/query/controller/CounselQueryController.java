@@ -35,9 +35,10 @@ public class CounselQueryController {
     @GetMapping("/customers/{customerId}/counsels")
     public ResponseEntity<Slice<CounselListResponse>> requestCounselList(
             @PathVariable("customerId") BigInteger customerId,
+            @RequestParam("customerType") String customerType,
             @PageableDefault(page = 0, size = 5, sort = "consult_date", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(counselQueryService.findCounselsByCustomerId(customerId, pageable));
+        return ResponseEntity.ok(counselQueryService.findCounselsByCustomerId(customerId, customerType, pageable));
     }
 
 }

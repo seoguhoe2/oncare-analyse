@@ -18,5 +18,6 @@ public interface CounselQueryMapper {
     @Nullable List<CustomerListResponse> searchCustomersByName(String keyword);
 
     List<CounselListResponse> findCounselsByCustomerId(@Param("customerId")BigInteger customerId,
+                                                       @Param("customerType")String customerType,
                                                        @Param("limit")int limit, @Param("offset")long offset);
 }

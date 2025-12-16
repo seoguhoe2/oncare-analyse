@@ -14,5 +14,5 @@ public interface CounselQueryService {
 
     @Nullable List<CustomerListResponse> searchCustomers(String keyword);
 
-    @Nullable Slice<CounselListResponse> findCounselsByCustomerId(BigInteger customerId, Pageable pageable);
+    @Nullable Slice<CounselListResponse> findCounselsByCustomerId(BigInteger customerId, String customerType, Pageable pageable);
 }

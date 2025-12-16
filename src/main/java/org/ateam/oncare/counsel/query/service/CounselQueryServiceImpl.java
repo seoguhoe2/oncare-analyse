@@ -35,13 +35,13 @@ public class CounselQueryServiceImpl implements CounselQueryService {
     }
 
     @Override
-    public @Nullable Slice<CounselListResponse> findCounselsByCustomerId(BigInteger customerId, Pageable pageable) {
+    public @Nullable Slice<CounselListResponse> findCounselsByCustomerId(BigInteger customerId, String customerType, Pageable pageable) {
         int pageSize = pageable.getPageSize(); // 5
         int limit = pageSize + 1;              // 6 (검증용)
         long offset = pageable.getOffset();
 
         // DB 조회
-        List<CounselListResponse> counselList = counselQueryMapper.findCounselsByCustomerId(customerId, limit, offset);
+        List<CounselListResponse> counselList = counselQueryMapper.findCounselsByCustomerId(customerId, limit, offset, customerType);
 
         boolean hasNext = false;             // 다음 페이지가 없으면 스크롤 안되도록
         if (counselList.size() > pageSize) {

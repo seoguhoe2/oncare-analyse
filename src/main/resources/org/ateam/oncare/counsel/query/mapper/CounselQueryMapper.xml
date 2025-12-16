@@ -23,8 +23,8 @@
                last_counsel_date,
                consult_count,
                guardian_name,
-               guardian_phone
-          FROM (
+               guardian_phone,
+               customer_type FROM (
                  SELECT
                      b.id AS customer_id,
                      b.name,
@@ -36,8 +36,8 @@
                      b.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE beneficiary_id = b.id) AS consult_count,
                      g.name AS guardian_name,
-                     g.phone AS guardian_phone
-                 FROM beneficiary b
+                     g.phone AS guardian_phone,
+                     'beneficiary' AS customer_type FROM beneficiary b
                           LEFT JOIN guardian g ON b.id = g.beneficiary_id AND g.is_primary = 'Y'
 
                  UNION ALL
@@ -56,8 +56,8 @@
                      p.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE potential_id = p.id) AS consult_count,
                      NULL AS guardian_name,
-                     NULL AS guardian_phone
-                 FROM potential_customer p
+                     NULL AS guardian_phone,
+                     'potential' AS customer_type FROM potential_customer p
                  WHERE p.current_stage &lt; 4
              ) AS total_list
         ORDER BY last_counsel_date DESC
@@ -71,8 +71,8 @@
             last_counsel_date,
             consult_count,
             guardian_name,
-            guardian_phone
-        FROM (
+            guardian_phone,
+            customer_type FROM (
                  SELECT
                      b.id AS customer_id,
                      b.name,
@@ -81,8 +81,8 @@
                      b.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE beneficiary_id = b.id) AS consult_count,
                      g.name AS guardian_name,
-                     g.phone AS guardian_phone
-                 FROM beneficiary b
+                     g.phone AS guardian_phone,
+                     'beneficiary' AS customer_type FROM beneficiary b FROM beneficiary b
                           LEFT JOIN guardian g ON b.id = g.beneficiary_id AND g.is_primary = 'Y'
                  WHERE REPLACE(b.phone, '-', '') LIKE CONCAT('%', #{keyword}, '%')
                     OR REPLACE(g.phone, '-', '') LIKE CONCAT('%', #{keyword}, '%')
@@ -103,8 +103,8 @@
                      p.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE potential_id = p.id) AS consult_count,
                      NULL AS guardian_name,
-                     NULL AS guardian_phone
-                 FROM potential_customer p
+                     NULL AS guardian_phone,
+                     'potential' AS customer_type FROM potential_customer p
                  WHERE p.current_stage &lt; 4
                    AND REPLACE(p.phone, '-', '') LIKE CONCAT('%', #{keyword}, '%')
              ) AS total_list
@@ -119,8 +119,8 @@
             last_counsel_date,
             consult_count,
             guardian_name,
-            guardian_phone
-        FROM (
+            guardian_phone,
+            customer_type FROM (
                  SELECT
                      b.id AS customer_id,
                      b.name,
@@ -129,8 +129,8 @@
                      b.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE beneficiary_id = b.id) AS consult_count,
                      g.name AS guardian_name,
-                     g.phone AS guardian_phone
-                 FROM beneficiary b
+                     g.phone AS guardian_phone,
+                     'beneficiary' AS customer_type FROM beneficiary b
                           LEFT JOIN guardian g ON b.id = g.beneficiary_id AND g.is_primary = 'Y'
                  WHERE b.name LIKE CONCAT('%', #{keyword}, '%')
                     OR g.name LIKE CONCAT('%', #{keyword}, '%')
@@ -151,8 +151,8 @@
                      p.last_counsel_date,
                      (SELECT COUNT(*) FROM counsel_history WHERE potential_id = p.id) AS consult_count,
                      NULL AS guardian_name,
-                     NULL AS guardian_phone
-                 FROM potential_customer p
+                     NULL AS guardian_phone,
+                     'potential' AS customer_type FROM potential_customer p
                  WHERE p.current_stage &lt; 4
                    AND p.name LIKE CONCAT('%', #{keyword}, '%')
              ) AS total_list
@@ -172,19 +172,12 @@
             ch.content                               AS detail,
             DATE_FORMAT(ch.consult_date, '%Y-%m-%d') AS consult_date,
             DATE_FORMAT(ch.consult_date, '%H:%i')    AS consult_time,
-
-            -- [1] Employee 테이블 조인 결과 (resultMap의 column 속성에 맞춰 별칭 지정)
             e.name                                   AS counselor_name,
-
-            -- [2] Category 테이블 조인 결과
             mcc.name                                 AS m_counsel_category_name
 
           FROM counsel_history ch
-                 -- 상담원 정보 조인 (FK가 counselor_id라고 가정)
                  LEFT JOIN employee e ON ch.counselor_id = e.id
-            -- 상담 카테고리 정보 조인 (FK가 consult_category 라고 가정)
                  LEFT JOIN m_counsel_category mcc ON ch.consult_category_id = mcc.id
-
         WHERE ch.beneficiary_id = #{customerId}
         ORDER BY ch.consult_date DESC
             LIMIT #{limit} OFFSET #{offset}
