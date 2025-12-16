@@ -82,7 +82,7 @@
                      (SELECT COUNT(*) FROM counsel_history WHERE beneficiary_id = b.id) AS consult_count,
                      g.name AS guardian_name,
                      g.phone AS guardian_phone,
-                     'beneficiary' AS customer_type FROM beneficiary b FROM beneficiary b
+                     'beneficiary' AS customer_type FROM beneficiary b
                           LEFT JOIN guardian g ON b.id = g.beneficiary_id AND g.is_primary = 'Y'
                  WHERE REPLACE(b.phone, '-', '') LIKE CONCAT('%', #{keyword}, '%')
                     OR REPLACE(g.phone, '-', '') LIKE CONCAT('%', #{keyword}, '%')
@@ -168,19 +168,63 @@
     </resultMap>
     <select id="findCounselsByCustomerId" resultMap="counselListResponse">
         SELECT
-            ch.id                                    AS counsel_history_id,
-            ch.content                               AS detail,
-            DATE_FORMAT(ch.consult_date, '%Y-%m-%d') AS consult_date,
-            DATE_FORMAT(ch.consult_date, '%H:%i')    AS consult_time,
-            e.name                                   AS counselor_name,
-            mcc.name                                 AS m_counsel_category_name
+        ch.id                                    AS counsel_history_id,
+        ch.detail                               AS detail,
+        DATE_FORMAT(ch.consult_date, '%Y-%m-%d') AS consult_date,
+        DATE_FORMAT(ch.consult_date, '%H:%i')    AS consult_time,
+        e.name                                   AS counselor_name,
+        mcc.name                                 AS m_counsel_category_name
 
-          FROM counsel_history ch
-                 LEFT JOIN employee e ON ch.counselor_id = e.id
-                 LEFT JOIN m_counsel_category mcc ON ch.consult_category_id = mcc.id
-        WHERE ch.beneficiary_id = #{customerId}
+        FROM counsel_history ch
+        LEFT JOIN employee e ON ch.counselor_id = e.id
+        LEFT JOIN m_counsel_category mcc ON ch.counsel_category_id = mcc.id
+
+        <where>
+            <choose>
+                <when test='customerType.equals("potential")'>
+                    AND ch.potential_id = #{customerId}
+                </when>
+                <otherwise>
+                    AND ch.beneficiary_id = #{customerId}
+                </otherwise>
+            </choose>
+            <if test="counselCategoryName != null and counselCategoryName != ''">
+                AND mcc.name = #{counselCategoryName}
+            </if>
+        </where>
+
         ORDER BY ch.consult_date DESC
-            LIMIT #{limit} OFFSET #{offset}
+        LIMIT #{limit} OFFSET #{offset}
     </select>
+    <resultMap id="counselDetailResponse" type="org.ateam.oncare.counsel.query.dto.CounselDetailResponse">
+        <id property="counselHistoryId" column="counsel_history_id"/>
+        <result property="counselCategoryName" column="m_counsel_category_name"/>
+        <result property="detail" column="detail"/>
+        <result property="summary" column="summary"/>
+        <result property="followUp" column="follow_up"/>
+        <result property="followUpNecessary" column="follow_up_necessary"/>
+        <result property="counselorName" column="counselor_name"/>
+        <result property="consultDate" column="consult_date"/>
+    </resultMap>
+    <select id="findCounselDetailById" parameterType="java.math.BigInteger" resultMap="counselDetailResponse">
+        SELECT
+            ch.counsel_history_id,
+            cc.name                 AS m_counsel_category_name,
+            ch.detail,
+            ch.summary,
+            ch.follow_up,
+            ch.follow_up_necessary,
+            m.name                  AS counselor_name,
+            ch.consult_date
+        FROM
+            counsel_history ch
+                LEFT JOIN
+            counsel_category cc ON ch.counsel_category_id = cc.id
+                LEFT JOIN
+            member m ON ch.counselor_id = m.id
+        WHERE
+            ch.counsel_history_id = #{counselHistoryId}
+    </select>
+
 
 </mapper>

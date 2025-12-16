@@ -1,5 +1,7 @@
 package org.ateam.oncare.counsel.query.controller;
 
+import lombok.RequiredArgsConstructor;
+import org.ateam.oncare.counsel.query.dto.CounselDetailResponse;
 import org.ateam.oncare.counsel.query.dto.CounselListResponse;
 import org.ateam.oncare.counsel.query.dto.CustomerListResponse;
 import org.ateam.oncare.counsel.query.service.CounselQueryService;
@@ -18,13 +20,9 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/counsel")
 @Validated
+@RequiredArgsConstructor
 public class CounselQueryController {
     private final CounselQueryService counselQueryService;
-
-    @Autowired
-    public CounselQueryController(CounselQueryService counselQueryService) {
-        this.counselQueryService = counselQueryService;
-    }
 
     @GetMapping("/customers")
     public ResponseEntity<List<CustomerListResponse>> requestCustomerList(
@@ -36,9 +34,15 @@ public class CounselQueryController {
     public ResponseEntity<Slice<CounselListResponse>> requestCounselList(
             @PathVariable("customerId") BigInteger customerId,
             @RequestParam("customerType") String customerType,
+            @RequestParam(value = "counselCategoryName", required = false) String counselCategoryName,
             @PageableDefault(page = 0, size = 5, sort = "consult_date", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(counselQueryService.findCounselsByCustomerId(customerId, customerType, pageable));
+        return ResponseEntity.ok(counselQueryService.findCounselsByCustomerId(customerId, customerType, counselCategoryName, pageable));
+    }
+
+    @GetMapping("/counsels/{counselId}")
+    public ResponseEntity<CounselDetailResponse> requestCounselDetail(@PathVariable("counselHistoryId")BigInteger counselHistoryId) {
+        return ResponseEntity.ok(counselQueryService.findCounselDetailById(counselHistoryId));
     }
 
 }
