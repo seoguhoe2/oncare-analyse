@@ -203,27 +203,31 @@
         <result property="summary" column="summary"/>
         <result property="followUp" column="follow_up"/>
         <result property="followUpNecessary" column="follow_up_necessary"/>
+        <result property="churn" column="churn"/>
+        <result property="churnReason" column="churn_reason"/>
         <result property="counselorName" column="counselor_name"/>
         <result property="consultDate" column="consult_date"/>
     </resultMap>
     <select id="findCounselDetailById" parameterType="java.math.BigInteger" resultMap="counselDetailResponse">
         SELECT
-            ch.counsel_history_id,
-            cc.name                 AS m_counsel_category_name,
+            ch.id                   AS counsel_history_id,
+            mcc.name                 AS m_counsel_category_name,
             ch.detail,
             ch.summary,
             ch.follow_up,
             ch.follow_up_necessary,
-            m.name                  AS counselor_name,
+            ch.churn,
+            ch.churn_reason,
+            e.name                  AS counselor_name,
             ch.consult_date
         FROM
             counsel_history ch
                 LEFT JOIN
-            counsel_category cc ON ch.counsel_category_id = cc.id
+            m_counsel_category mcc ON ch.counsel_category_id = mcc.id
                 LEFT JOIN
-            member m ON ch.counselor_id = m.id
+            employee e ON ch.counselor_id = e.id
         WHERE
-            ch.counsel_history_id = #{counselHistoryId}
+            ch.id = #{counselHistoryId}
     </select>
 
 

@@ -18,6 +18,8 @@ public class CounselDetailResponse {
     private String summary;
     private String followUp;
     private String followUpNecessary;
+    private String churn;
+    private String churnReason;
     private String counselorName;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime consultDate;

@@ -40,7 +40,7 @@ public class CounselQueryController {
         return ResponseEntity.ok(counselQueryService.findCounselsByCustomerId(customerId, customerType, counselCategoryName, pageable));
     }
 
-    @GetMapping("/counsels/{counselId}")
+    @GetMapping("/{counselHistoryId}")
     public ResponseEntity<CounselDetailResponse> requestCounselDetail(@PathVariable("counselHistoryId")BigInteger counselHistoryId) {
         return ResponseEntity.ok(counselQueryService.findCounselDetailById(counselHistoryId));
     }
