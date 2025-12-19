@@ -1,10 +1,7 @@
 package org.ateam.oncare.counsel.command.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -14,6 +11,7 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @EntityListeners(AuditingEntityListener.class)
@@ -48,7 +46,7 @@ public class PotentialCustomer {
     private LocalDateTime createAt;
 
     @Column(name = "last_counsel_date")
-    private String lastCounselDate;
+    private LocalDateTime lastCounselDate;
 
     @Column(name = "current_stage")
     private int currentStage;  // 가입 단계 (1~4)

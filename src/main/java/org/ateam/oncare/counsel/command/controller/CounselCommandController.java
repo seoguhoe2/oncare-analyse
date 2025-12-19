@@ -2,17 +2,13 @@ package org.ateam.oncare.counsel.command.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.ateam.oncare.counsel.command.dto.RegistCounselRequest;
-import org.ateam.oncare.counsel.command.dto.RegistCounselResponse;
-import org.ateam.oncare.counsel.command.service.CounselCommandService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.ateam.oncare.counsel.command.dto.*;
+import org.ateam.oncare.counsel.command.service.CounselFacadeService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigInteger;
 
 @RestController
 @RequestMapping("/api/counsel")
@@ -21,14 +17,36 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CounselCommandController {
 
-    private final CounselCommandService counselCommandService;
-
-    @PostMapping("/regist")
-    public ResponseEntity<RegistCounselResponse> registCounsel(
-            @RequestBody RegistCounselRequest,
-            @AuthenticationPrincipal CustomUserDetails userDetailsrequest
-    ) {
-
-        return ResponseEntity.ok(counselCommandService.registCounsel());
+    private final CounselFacadeService counselFacadeService;
+    // 고객 리스트에 나오지 않은 신규 고객일 경우
+    @PostMapping("/subscription")  // 가입 상담
+    public ResponseEntity<SubscriptionResponse> registNewSubscription(@RequestBody Subscription request) {
+        return counselFacadeService.registNewSubscription(request);
     }
+
+    @PostMapping("/general")       // 통합 상담(렌탈 + 문의 + 컴플레인 + 해지)
+    public ResponseEntity<GeneralCounselResponse> registNewGeneralCounsel(@RequestBody GeneralCounsel request,) {
+        return counselFacadeService.registNewGeneralCounsel(request);
+    }
+
+    // 기존 고객의 상담이 진행될 경우
+    @PostMapping("/{customerId}/subscription") // 기존 고객의 가입 상담
+    public ResponseEntity<SubscriptionResponse> registSubscription(@RequestBody Subscription request,
+                                                                   @PathVariable BigInteger customerId) {
+        return counselFacadeService.registSubscription(request);
+    }
+
+    @PostMapping("/{customerId}/general")  // 기존 고객의 통합 상담
+    public ResponseEntity<GeneralCounselResponse> registGeneralCounsel(@RequestBody GeneralCounsel request,
+                                                                       @PathVariable BigInteger customerId) {
+        return counselFacadeService.registGeneralCounsel(request);
+    }
+
+    @PostMapping("/potentialStage")
+    public ResponseEntity<SaveStageDataResponse> saveStageData(StageData request) {
+        return PotentialStageService.saveStageData(request);
+    }
+
+
+
 }
