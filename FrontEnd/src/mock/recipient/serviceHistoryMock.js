@@ -1,0 +1,38 @@
+export const serviceHistoryMock = [
+    {
+      code: 'SV001',
+      recipientId: 1,
+      name: '방문요양',
+      period: '2024-12',
+      amount: 1500000,
+      count: 30,
+      status: '12월 진행 중',
+    },
+    {
+      code: 'SV002',
+      recipientId: 1,
+      name: '방문요양',
+      period: '2024-11',
+      amount: 1500000,
+      count: 30,
+      status: '11월 완료',
+    },
+    {
+      code: 'SV003',
+      recipientId: 2,
+      name: '렌탈료',
+      period: '2024-10',
+      amount: 60000,
+      count: 1,
+      status: '전동침대, 휠체어',
+    },
+    {
+      code: 'SV004',
+      recipientId: 2,
+      name: '방문요양',
+      period: '2024-10',
+      amount: 1430000,
+      count: 29,
+      status: '10월 완료',
+    },
+  ]
