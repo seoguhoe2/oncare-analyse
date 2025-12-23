@@ -8,6 +8,7 @@ import org.ateam.oncare.counsel.command.repository.PotentialCustomerRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 
 @Service
 @Slf4j
@@ -15,11 +16,12 @@ import java.math.BigInteger;
 public class PotentialCustomerService {
     private final PotentialCustomerRepository potentialCustomerRepository;
 
-    public BigInteger registPotentialCustomer(Subscription request) {
+    public BigInteger registPotentialCustomer(String name, String phone) {
 
         PotentialCustomer potentialCustomer = PotentialCustomer.builder()
-                .name(request.getName())
-                .phone(request.getPhone())
+                .name(name)
+                .phone(phone)
+                .createAt(LocalDateTime.now())
                 .lastCounselDate(null)
                 .currentStage(1)
                 .build();

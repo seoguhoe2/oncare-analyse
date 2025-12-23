@@ -8,11 +8,10 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class SubscriptionResponse {
+public class NewSubscriptionResponse {
     private BigInteger counselHistoryId;
     private int counselCategoryId;
     private String detail;
@@ -27,8 +26,4 @@ public class SubscriptionResponse {
     private int reservationChannelId;
     private BigInteger beneficiaryId;
     private BigInteger potentialId;
-
-    // 가입 상담 관리 내용
-    private int stage;
-    private String htmlCode;
 }

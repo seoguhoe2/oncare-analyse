@@ -1,12 +1,9 @@
 package org.ateam.oncare.counsel.command.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import lombok.*;
 
 import java.math.BigInteger;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -15,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class Subscription {
+public class Subscription implements CounselHistoryRequired {
     // potential_customer 등록 필요한 정보
     private String name;
     private String phone;
@@ -35,4 +32,8 @@ public class Subscription {
     private String customerType;
     private int counselCategoryId;
     private int employeeId;
+
+    // 1단계에서 저장하는걸 반드시 전재한다고 생각하기
+    private int stage;
+    private String htmlCode;
 }

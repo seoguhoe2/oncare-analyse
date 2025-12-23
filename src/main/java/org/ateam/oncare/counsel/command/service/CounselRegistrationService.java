@@ -3,19 +3,14 @@ package org.ateam.oncare.counsel.command.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ateam.oncare.beneficiary.command.service.BeneficiaryUpdateService;
-import org.ateam.oncare.counsel.command.dto.GeneralCounselResponse;
-import org.ateam.oncare.counsel.command.dto.GeneralCounsel;
-import org.ateam.oncare.counsel.command.dto.Subscription;
-import org.ateam.oncare.counsel.command.dto.SubscriptionResponse;
+import org.ateam.oncare.counsel.command.dto.*;
 import org.ateam.oncare.counsel.command.entity.CounselHistory;
 import org.ateam.oncare.counsel.command.repository.CounselHistoryRepository;
 import org.ateam.oncare.counsel.command.repository.PotentialCustomerRepository;
-import org.ateam.oncare.counsel.command.repository.PotentialStageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
-import java.time.LocalDateTime;
 
 @Service
 @Slf4j
@@ -26,12 +21,17 @@ public class CounselRegistrationService {
     private final BeneficiaryUpdateService beneficiaryUpdateService;
     private final PotentialCustomerRepository potentialCustomerRepository;
 
-    public SubscriptionResponse registSubscription(Subscription request) {
+    public NewSubscriptionResponse registSubscription(Subscription request) {
         CounselHistory counselHistory = saveCounselHistory(request);
-        SubscriptionResponse response = buildSubscriptionResponse(counselHistory);
+        return buildSubscriptionResponse(counselHistory);
     }
 
-    private CounselHistory saveCounselHistory(Subscription request) {
+    public GeneralCounselResponse registGeneralCounsel(GeneralCounsel request) {
+        CounselHistory counselHistory = saveCounselHistory(request);
+        return GeneralCounselResponse.from(counselHistory);
+    }
+
+    private CounselHistory saveCounselHistory(CounselHistoryRequired request) {
         CounselHistory.CounselHistoryBuilder counselHistoryBuilder = CounselHistory.builder()
                 .consultDate(request.getConsultDate())
                 .detail(request.getDetail())
@@ -64,7 +64,26 @@ public class CounselRegistrationService {
 
     }
 
-    private SubscriptionResponse buildSubscriptionResponse(CounselHistory counselHistory) {
-        
+    private NewSubscriptionResponse buildSubscriptionResponse(CounselHistory counselHistory) {
+        NewSubscriptionResponse response = new NewSubscriptionResponse();
+        response.setCounselHistoryId(BigInteger.valueOf(counselHistory.getId()));
+        response.setCounselCategoryId(counselHistory.getCounselCategoryId());
+        response.setDetail(counselHistory.getDetail());
+        response.setSummary(counselHistory.getSummary());
+        response.setFollowUp(counselHistory.getFollowUp());
+        response.setFollowUpNecessary(counselHistory.getFollowUpNecessary());
+        response.setChurn(counselHistory.getChurn());
+        response.setChurnReason(counselHistory.getChurnReason());
+        response.setCounselorId(counselHistory.getCounselorId());
+        response.setConsultDate(counselHistory.getConsultDate());
+        response.setReservationChannelId(counselHistory.getReservationChannelId());
+        if(counselHistory.getBeneficiaryId() != null) {
+            response.setBeneficiaryId(BigInteger.valueOf(counselHistory.getBeneficiaryId()));
+            response.setPotentialId(null);
+        } else {
+            response.setBeneficiaryId(null);
+            response.setPotentialId(BigInteger.valueOf(counselHistory.getPotentialId()));
+        }
+        return response;
     }
 }

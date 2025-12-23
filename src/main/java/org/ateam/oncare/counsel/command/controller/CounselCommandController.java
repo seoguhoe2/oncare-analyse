@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigInteger;
 
+
 @RestController
 @RequestMapping("/api/counsel")
 @Slf4j
@@ -20,20 +21,22 @@ public class CounselCommandController {
     private final CounselFacadeService counselFacadeService;
     // 고객 리스트에 나오지 않은 신규 고객일 경우
     @PostMapping("/subscription")  // 가입 상담
-    public ResponseEntity<SubscriptionResponse> registNewSubscription(@RequestBody Subscription request) {
+    public ResponseEntity<NewSubscriptionResponse> registNewSubscription(@RequestBody Subscription request) {
         return counselFacadeService.registNewSubscription(request);
     }
 
     @PostMapping("/general")       // 통합 상담(렌탈 + 문의 + 컴플레인 + 해지)
-    public ResponseEntity<GeneralCounselResponse> registNewGeneralCounsel(@RequestBody GeneralCounsel request,) {
+    public ResponseEntity<GeneralCounselResponse> registNewGeneralCounsel(@RequestBody GeneralCounsel request) {
         return counselFacadeService.registNewGeneralCounsel(request);
     }
 
-    // 기존 고객의 상담이 진행될 경우
+     // 기존 고객의 상담이 진행될 경우
     @PostMapping("/{customerId}/subscription") // 기존 고객의 가입 상담
     public ResponseEntity<SubscriptionResponse> registSubscription(@RequestBody Subscription request,
-                                                                   @PathVariable BigInteger customerId) {
-        return counselFacadeService.registSubscription(request);
+                                                                      @PathVariable BigInteger customerId,
+                                                                      @RequestParam("customerType") String customerType,
+                                                                      @RequestParam("customerCategoryName") String customerCategoryName) {
+        return counselFacadeService.registSubscription(request, customerId, customerType, customerCategoryName);
     }
 
     @PostMapping("/{customerId}/general")  // 기존 고객의 통합 상담
