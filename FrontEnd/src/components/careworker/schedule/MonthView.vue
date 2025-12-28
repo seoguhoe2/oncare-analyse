@@ -1,22 +1,30 @@
 <!-- components/schedule/MonthView.vue -->
 
 <script setup>
-import { ref, computed, defineEmits } from 'vue';
-import { scheduleList } from '@/mock/careworker/scheduleData';
+import { computed, defineEmits, defineProps } from 'vue';
 
-const emit = defineEmits(['select-schedule', 'view-change']);
+const emit = defineEmits(['select-schedule', 'view-change', 'add-schedule', 'date-change']);
 
-// 현재 기준 날짜 (초기값: 2025년 12월)
-const currentDate = ref(new Date('2025-12-01'));
+const props = defineProps({
+  schedules: {
+    type: Array,
+    default: () => [],
+  },
+  currentDate: {
+    type: Date,
+    default: () => new Date(),
+  },
+});
 
-// 달력 데이터 계산을 위한 computed 속성들
-const currentYear = computed(() => currentDate.value.getFullYear());
-const currentMonth = computed(() => currentDate.value.getMonth());
+const currentYear = computed(() => props.currentDate.getFullYear());
+const currentMonth = computed(() => props.currentDate.getMonth());
 
-// 해당 월의 일정을 날짜별로 그룹화
+const scheduleData = computed(() => props.schedules || []);
+
+// 일정 데이터를 날짜별로 그룹화
 const schedulesByDate = computed(() => {
   const grouped = {};
-  scheduleList.forEach(schedule => {
+  scheduleData.value.forEach(schedule => {
     if (!grouped[schedule.date]) {
       grouped[schedule.date] = [];
     }
@@ -25,19 +33,21 @@ const schedulesByDate = computed(() => {
   return grouped;
 });
 
-// 달력 그리드에 표시할 날짜 배열 생성 (이전달 말일 + 이번달 + 다음달 초)
+// 달력 그리드 (이전/다음달 포함 6주) - 월요일부터 시작
 const calendarDays = computed(() => {
   const days = [];
   const firstDayOfMonth = new Date(currentYear.value, currentMonth.value, 1);
   const lastDayOfMonth = new Date(currentYear.value, currentMonth.value + 1, 0);
-  
-  // 시작일: 이번달 1일이 속한 주의 일요일
-  const startDate = new Date(firstDayOfMonth);
-  startDate.setDate(startDate.getDate() - startDate.getDay());
 
-  // 종료일: 이번달 말일이 속한 주의 토요일 (6주 분량 확보를 위해 여유있게 설정)
+  // 시작: 이번 달 1일이 속한 주의 월요일
+  const startDate = new Date(firstDayOfMonth);
+  const day = startDate.getDay(); // 0(일) ~ 6(토)
+  const diff = day === 0 ? -6 : 1 - day; // 일요일이면 -6, 그 외에는 1-day
+  startDate.setDate(startDate.getDate() + diff);
+
+  // 끝: 6주(42칸) 채우기
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 41); // 6주 * 7일 = 42일
+  endDate.setDate(endDate.getDate() + 41);
 
   let dateIter = new Date(startDate);
   while (dateIter <= endDate) {
@@ -47,7 +57,7 @@ const calendarDays = computed(() => {
   return days;
 });
 
-// 날짜 포맷팅 (YYYY-MM-DD)
+// 날짜 포맷 (YYYY-MM-DD)
 const formatDate = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -55,33 +65,33 @@ const formatDate = (date) => {
   return `${y}-${m}-${d}`;
 };
 
-// 화면 표시용 날짜 포맷 (2025년 12월)
+// 화면 표시용
 const displayMonth = computed(() => {
   return `${currentYear.value}년 ${currentMonth.value + 1}월`;
 });
 
-// 이전/다음 달 이동
+// 이전/다음 이동
 const prevMonth = () => {
-  currentDate.value = new Date(currentYear.value, currentMonth.value - 1, 1);
+  const newDate = new Date(currentYear.value, currentMonth.value - 1, 1);
+  emit('date-change', newDate);
 };
 const nextMonth = () => {
-  currentDate.value = new Date(currentYear.value, currentMonth.value + 1, 1);
+  const newDate = new Date(currentYear.value, currentMonth.value + 1, 1);
+  emit('date-change', newDate);
 };
 
 // 오늘로 이동
 const goToday = () => {
-  currentDate.value = new Date();
+  const newDate = new Date();
+  emit('date-change', newDate);
 };
 
-// 이번 달 날짜인지 확인
-const isCurrentMonth = (date) => {
-  return date.getMonth() === currentMonth.value;
-};
+// 현재 달 여부
+const isCurrentMonth = (date) => date.getMonth() === currentMonth.value;
+const isToday = (date) => formatDate(date) === formatDate(new Date());
 
-// 오늘 날짜인지 확인
-const isToday = (date) => {
-  const today = new Date();
-  return formatDate(date) === formatDate(today);
+const openAdd = () => {
+  emit('add-schedule', { date: formatDate(new Date()) });
 };
 </script>
 
@@ -102,19 +112,19 @@ const isToday = (date) => {
 
       <div class="right-actions">
         <button class="today-btn" @click="goToday">오늘</button>
-        <button class="add-btn">+ 일정등록</button>
+        <button class="add-btn" @click="openAdd">+ 일정등록</button>
       </div>
     </div>
 
     <div class="month-view-body">
       <div class="weekday-header">
-        <div class="weekday">일</div>
         <div class="weekday">월</div>
         <div class="weekday">화</div>
         <div class="weekday">수</div>
         <div class="weekday">목</div>
         <div class="weekday">금</div>
         <div class="weekday">토</div>
+        <div class="weekday">일</div>
       </div>
 
       <div class="date-grid">
@@ -147,7 +157,7 @@ const isToday = (date) => {
 </template>
 
 <style scoped>
-/* 컨트롤 바 스타일 (기존 CalendarView와 동일하게 유지) */
+/* 컨트롤바 */
 .calendar-container {
   background: white;
   border-radius: 0.75rem;
@@ -182,15 +192,13 @@ const isToday = (date) => {
 .today-btn { padding: 0.5rem 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; background: #f9fafb; cursor: pointer; font-weight: 600; color: #4b5563; }
 .add-btn { padding: 0.5rem 1rem; background-color: #4ade80; color: white; border: none; border-radius: 0.5rem; font-weight: 700; cursor: pointer; }
 
-/* 월간 뷰 스타일 */
+/* 월간 바디 */
 .month-view-body { flex: 1; display: flex; flex-direction: column; border: 1px solid #f3f4f6; border-radius: 0.5rem; overflow: hidden; }
 
-/* 요일 헤더 */
 .weekday-header { display: grid; grid-template-columns: repeat(7, 1fr); background: #f9fafb; border-bottom: 1px solid #f3f4f6; }
 .weekday { padding: 0.75rem; text-align: center; font-weight: 600; color: #6b7280; font-size: 0.9rem; }
 .weekday:first-child { color: #ef4444; /* 일요일 빨간색 */ }
 
-/* 날짜 그리드 */
 .date-grid { display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; }
 .date-cell {
   border-right: 1px solid #f3f4f6; border-bottom: 1px solid #f3f4f6;
@@ -198,18 +206,16 @@ const isToday = (date) => {
   padding: 0.5rem;
   display: flex; flex-direction: column; gap: 0.25rem;
 }
-.date-cell:nth-child(7n) { border-right: none; } /* 오른쪽 끝 테두리 제거 */
+.date-cell:nth-child(7n) { border-right: none; } /* 맨오른쪽 줄 닫기 */
 
-/* 날짜 숫자 스타일 */
 .date-number { text-align: left; font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
-.not-current-month .date-number { color: #d1d5db; /* 이전/다음달 날짜 흐리게 */ }
+.not-current-month .date-number { color: #d1d5db; /* 이전/다음달 날짜 흐리게*/ }
 .today-circle {
   display: inline-block; width: 1.5rem; height: 1.5rem;
   background-color: #4ade80; color: white; border-radius: 50%;
   text-align: center; line-height: 1.5rem;
 }
 
-/* 셀 내부 일정 아이템 스타일 */
 .cell-schedules { display: flex; flex-direction: column; gap: 0.25rem; overflow-y: auto; }
 .schedule-item {
   padding: 0.25rem 0.5rem;
@@ -222,13 +228,13 @@ const isToday = (date) => {
 .schedule-item:hover { opacity: 0.8; }
 .time { font-weight: 600; }
 
-/* 일정 색상 클래스 (mock 데이터의 colorClass와 매칭) */
+/* 일정 색상 클래스 (mock 데이터 기반) */
 .bg-yellow { background-color: #fef9c3; color: #854d0e; border-left: 3px solid #eab308; }
 .bg-blue { background-color: #dbeafe; color: #1e40af; border-left: 3px solid #3b82f6; }
 .bg-green { background-color: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
 .bg-purple { background-color: #f3e8ff; color: #6b21a8; border-left: 3px solid #9333ea; }
 
-/* 반응형: 모바일에서는 셀 높이 줄이고 글자 작게 */
+/* 반응형: 모바일에서는 높이/폰트 축소 */
 @media (max-width: 768px) {
   .date-cell { min-height: 80px; padding: 0.25rem; }
   .schedule-item { font-size: 0.7rem; padding: 0.1rem 0.25rem; }

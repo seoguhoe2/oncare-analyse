@@ -1,3 +1,4 @@
+<!-- src/components/recipient/main/category/modal/InquiryModal.vue -->
 <template>
   <div v-if="modelValue" class="modal-backdrop" @click.self="close">
     <div class="modal-panel">
@@ -9,10 +10,10 @@
         </div>
 
         <div class="info-wrapper">
-          <!-- 문의 유형 배지 -->
-          <div class="badge-row">
+          <!-- ✅ 문의 유형 배지: summary 사용(정기상담 등) -->
+          <div class="badge-row" v-if="detail?.summary">
             <span class="type-pill">
-              {{ inquiryType }}
+              {{ detail.summary }}
             </span>
           </div>
 
@@ -20,39 +21,54 @@
           <div class="info-grid">
             <div class="info-item">
               <div class="label">상담 날짜</div>
-              <div class="value">{{ inquiry?.date || '-' }}</div>
+              <div class="value">{{ detail?.consultDate || '-' }}</div>
             </div>
-            <div class="info-item">
-              <div class="label">상담 시간</div>
-              <div class="value">{{ inquiry?.time || '-' }}</div>
-            </div>
+
+            <!-- ✅ 상담 시간 제거 -->
+
             <div class="info-item">
               <div class="label">상담사</div>
-              <div class="value">{{ inquiry?.counselor || '-' }}</div>
+              <div class="value">{{ detail?.counselorName || '-' }}</div>
             </div>
+
             <div class="info-item">
               <div class="label">수급자</div>
-              <div class="value">{{ inquiry?.beneficiary || '-' }}</div>
+              <div class="value">{{ detail?.beneficiaryName || '-' }}</div>
             </div>
           </div>
         </div>
       </header>
 
       <!-- 본문 -->
-      <section class="modal-body" v-if="inquiry">
-        <div class="section-block">
-          <div class="section-title">상담 내용</div>
-          <div class="textarea-box">
-            {{ inquiry.text }}
-          </div>
-        </div>
+      <section class="modal-body">
+        <div v-if="loading" class="loading-text">상세 정보를 불러오는 중...</div>
 
-        <div class="section-block">
-          <div class="section-title">후속 조치</div>
-          <div class="followup-box">
-            {{ inquiry.followUp || '후속 조치 내용을 입력하세요.' }}
+        <template v-else>
+          <div v-if="errorMsg" class="error-box">
+            {{ errorMsg }}
           </div>
-        </div>
+
+          <!-- ✅ 상담 내용: detail -->
+          <div class="section-block" v-if="detail?.detail">
+            <div class="section-title">상담 내용</div>
+            <div class="textarea-box">
+              {{ detail.detail }}
+            </div>
+          </div>
+
+          <!-- ✅ 후속 조치: followUp -->
+          <div class="section-block" v-if="detail?.followUp">
+            <div class="section-title">후속 조치</div>
+            <div class="followup-box">
+              {{ detail.followUp }}
+            </div>
+          </div>
+
+          <!-- 아무 내용도 없을 때 -->
+          <div v-if="!hasAnyDetail && !errorMsg" class="empty-detail">
+            표시할 상세 내용이 없습니다.
+          </div>
+        </template>
       </section>
 
       <!-- 푸터 -->
@@ -66,26 +82,62 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import api from '@/lib/api'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  inquiry: {
-    type: Object,
-    default: null
-  }
+  modelValue: { type: Boolean, default: false },
+
+  beneficiaryId: { type: [Number, String], required: true },
+  counselHistoryId: { type: [Number, String], default: null }
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const detail = ref(null)
+const loading = ref(false)
+const errorMsg = ref('')
 
 const close = () => {
   emit('update:modelValue', false)
 }
 
-const inquiryType = computed(() => props.inquiry?.typeLabel || '정기상담')
+// ✅ 상세 조회 API만
+const fetchDetail = async () => {
+  if (!props.modelValue) return
+  if (!props.beneficiaryId || !props.counselHistoryId) return
+
+  loading.value = true
+  errorMsg.value = ''
+  detail.value = null
+
+  try {
+    const { data } = await api.get(
+      `/api/beneficiaries/${props.beneficiaryId}/counsel-histories/${props.counselHistoryId}`
+    )
+    detail.value = data
+  } catch (e) {
+    console.error('문의이력 상세 조회 실패:', e)
+    errorMsg.value = '문의이력 상세 정보를 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// ✅ 모달 열릴 때 / id 변경될 때 자동 조회
+watch(
+  () => [props.modelValue, props.counselHistoryId, props.beneficiaryId],
+  ([open]) => {
+    if (open) fetchDetail()
+  },
+  { immediate: true }
+)
+
+const hasAnyDetail = computed(() => {
+  const c = detail.value
+  if (!c) return false
+  return !!(c.detail || c.followUp)
+})
 </script>
 
 <style scoped>
@@ -110,7 +162,6 @@ const inquiryType = computed(() => props.inquiry?.typeLabel || '정기상담')
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
 }
 
-/* 헤더 (연두 배경) */
 .modal-header {
   padding: 16px 20px 18px;
   background: #ffffff;
@@ -210,6 +261,29 @@ const inquiryType = computed(() => props.inquiry?.typeLabel || '정기상담')
   border: 1px solid #fde68a;
   color: #854d0e;
   white-space: pre-wrap;
+}
+
+.loading-text {
+  font-size: 12px;
+  color: #6b7280;
+  padding: 10px 2px;
+}
+
+.empty-detail {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.error-box {
+  padding: 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
 }
 
 /* 푸터 */

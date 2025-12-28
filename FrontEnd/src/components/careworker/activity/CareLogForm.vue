@@ -17,6 +17,11 @@ const formData = ref({
   fallRisk: {}
 });
 
+// 신체활동 지원 항목은 다중 선택이 가능하므로 각 항목을 배열로 초기화
+careLogFormData.physicalSupport.items.forEach((item) => {
+  formData.value.physicalSupport[item.code] = [];
+});
+
 // 낙상위험도 점수 계산
 const totalFallRiskScore = computed(() => {
   let total = 0;

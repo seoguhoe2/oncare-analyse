@@ -6,9 +6,9 @@
         <p class="page-desc">요양보호사와 수급자 매칭 및 일정 관리</p>
       </div>
 
-      <button class="add-button">
-        <img src="@/assets/img/schedule/addSchedule.png" alt="일정 추가" />
-        일정 추가
+      <button v-if="rightButton?.show" class="add-button" type="button" @click="rightButton.onClick">
+        <img v-if="rightButton.icon" :src="rightButton.icon" :alt="rightButton.label" />
+        {{ rightButton.label }}
       </button>
     </div>
 
@@ -22,10 +22,7 @@
           :class="{ active: isActive(tab) }"
         >
           <span class="tab-icon" v-if="tab.icon">
-            <img
-              :src="isActive(tab) ? tab.activeIcon : tab.icon"
-              :alt="tab.label"
-            />
+            <img :src="isActive(tab) ? tab.activeIcon : tab.icon" :alt="tab.label" />
           </span>
           <span class="tab-label">{{ tab.label }}</span>
         </RouterLink>
@@ -35,18 +32,40 @@
         <RouterView />
       </div>
     </div>
+
+    <MatchCompleteModal :show="showMatchModal" :message="matchModalMessage" @close="onCloseMatchModal" />
+
+    <CreateVisitModal
+      :show="showCreateVisitModal"
+      @close="onCloseCreateVisitModal"
+      @create="onCreateVisit"
+    />
   </div>
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import calendarIcon from '@/assets/img/common/scheduleManagement.png'
 import calendarIconActive from '@/assets/img/common/greenSchedule.png'
 import matchingIcon from '@/assets/img/common/employeeManagement.png'
 import matchingIconActive from '@/assets/img/common/greenMatching.png'
+import addScheduleIcon from '@/assets/img/schedule/addSchedule.png'
+
+import { useMatchingSelectionStore } from '@/stores/matchingSelection'
+import { assignMatchingCareWorker, createVisitSchedule } from '@/api/schedule/matching.js'
+
+import MatchCompleteModal from '@/components/schedule/matching/MatchCompleteModal.vue'
+import CreateVisitModal from '@/components/schedule/calendar/CreateVisitModal.vue'
 
 const route = useRoute()
+const selection = useMatchingSelectionStore()
+
+const showMatchModal = ref(false)
+const matchModalMessage = ref('')
+
+const showCreateVisitModal = ref(false)
 
 const tabs = [
   {
@@ -66,6 +85,97 @@ const tabs = [
 ]
 
 const isActive = (tab) => route.name === tab.routeName
+const isMatchingRoute = computed(() => route.name === 'schedule-matching')
+
+const canMatch = computed(() => {
+  const r = selection?.recipient
+  const c = selection?.caregiver
+  return !!(r && (r.beneficiaryId ?? r.id) && c && (c.careWorkerId ?? c.id))
+})
+
+const getRecipientName = (r) => r?.beneficiaryName ?? r?.name ?? '수급자'
+const getCareWorkerName = (c) => c?.careWorkerName ?? c?.name ?? '요양보호사'
+
+const onClickMatch = async () => {
+  const r = selection?.recipient
+  const c = selection?.caregiver
+  const beneficiaryId = r?.beneficiaryId ?? r?.id
+  const careWorkerId = c?.careWorkerId ?? c?.id
+
+  if (!beneficiaryId || !careWorkerId) return
+
+  try {
+    await assignMatchingCareWorker({ beneficiaryId, careWorkerId })
+
+    matchModalMessage.value = `${getRecipientName(r)}와 ${getCareWorkerName(c)}의 매칭이 완료되었습니다.`
+    showMatchModal.value = true
+  } catch (e) {
+    console.error('[매칭 실패]', e)
+  }
+}
+
+const onCloseMatchModal = () => {
+  showMatchModal.value = false
+  window.location.reload()
+}
+
+const onClickAddSchedule = () => {
+  showCreateVisitModal.value = true
+}
+
+const onCloseCreateVisitModal = () => {
+  showCreateVisitModal.value = false
+}
+
+const onCreateVisit = async (payload) => {
+  const beneficiaryId = payload?.beneficiaryId ?? null
+  const careWorkerId = payload?.careWorkerId ?? null
+  const serviceTypeId = payload?.serviceTypeId ?? null
+  const startDt = payload?.startDt ?? ''
+  const endDt = payload?.endDt ?? ''
+  const note = payload?.note ?? ''
+
+  if (!beneficiaryId || !careWorkerId || !serviceTypeId || !startDt || !endDt) {
+    alert('수급자/요양보호사/서비스유형/날짜/시간을 모두 선택해 주세요.')
+    return
+  }
+
+  try {
+    await createVisitSchedule({
+      beneficiaryId,
+      careWorkerId,
+      serviceTypeId,
+      startDt,
+      endDt,
+      note,
+    })
+
+    alert('일정이 생성되었습니다.')
+    showCreateVisitModal.value = false
+    window.location.reload()
+  } catch (e) {
+    console.error('[일정 생성 실패]', e)
+    alert(e?.response?.data?.message || '일정 생성에 실패했습니다.')
+  }
+}
+
+const rightButton = computed(() => {
+  if (isMatchingRoute.value) {
+    return {
+      show: canMatch.value,
+      label: '매칭하기',
+      icon: null,
+      onClick: onClickMatch,
+    }
+  }
+
+  return {
+    show: true,
+    label: '일정 추가',
+    icon: addScheduleIcon,
+    onClick: onClickAddSchedule,
+  }
+})
 </script>
 
 <style scoped>

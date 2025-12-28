@@ -12,6 +12,7 @@
         <Calendar
           :keyword="keyword"
           :search-scope="searchScope"
+          :refresh-key="refreshKey"
           @select-date="onSelectDate"
         />
 
@@ -19,12 +20,17 @@
           :selected-date="selectedDate"
           :keyword="keyword"
           :search-scope="searchScope"
+          :refresh-key="refreshKey"
           @select-schedule="onSelectSchedule"
         />
       </div>
 
       <div class="right-col">
-        <ScheduleDetail :schedule="selectedSchedule" @close="onCloseDetail" />
+        <ScheduleDetail
+          :schedule="selectedSchedule"
+          @close="onCloseDetail"
+          @refresh="refreshAll"
+        />
       </div>
     </div>
   </div>
@@ -49,6 +55,12 @@ const searchScope = ref('ALL');
 
 const selectedDate = ref(formatDateKey(new Date()));
 const selectedSchedule = ref(null);
+
+const refreshKey = ref(0);
+
+const refreshAll = () => {
+  refreshKey.value += 1;
+};
 
 const onSelectDate = (dateKey) => {
   selectedDate.value = dateKey;

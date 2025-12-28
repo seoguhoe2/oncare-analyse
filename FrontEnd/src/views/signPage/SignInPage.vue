@@ -41,37 +41,43 @@ const userStore = useUserStore();
  * 권한별 아이디
  * id : admin1@example.com            관리자
  * id : material.staff1@example.com   자재팀 사원
- * id : cg2@example.com               요양사
- * id : sales.lead1@example.com       영업팀장            
+ * id : cg1@example.com               요양보호사 (김요양1)
+ * id : cg2@example.com               요양보호사 (이요양2)
+ * id : sales.lead1@example.com       영업팀장
  * pwd : pwd123    (공통)
  */
 
-const email = ref('admin1@example.com');
+const email = ref('cg1@example.com');
 const pwd = ref('pwd123');
 
 const handleLogin = async() => {
-  const response = 
+  const response =
     await api.post('/auth/login',
       {
         useremail: email.value,
         password: pwd.value
       },
       {
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             }
       });
-      
+
     const { accessToken, tokenType } = response.data;
 
-    // JWT 디코딩 (핵심) 
+    // JWT 디코딩 (핵심)
     // 토큰의 Payload(Claim) 부분을 JSON 객체로 변환해줍니다.
     const decoded = jwtDecode(accessToken);
 
-    userStore.setToken(accessToken);
+    userStore.setToken(accessToken , tokenType);
     userStore.logIn(decoded);
 
-  router.push({ name: 'dashboard' })
+  // 요양보호사(jobname === '요양보호사')면 홈페이지로, 아니면 대시보드로 이동
+  if (decoded.jobname === '요양보호사') {
+    router.push({ name: 'home' })
+  } else {
+    router.push({ name: 'dashboard' })
+  }
 }
 </script>
 

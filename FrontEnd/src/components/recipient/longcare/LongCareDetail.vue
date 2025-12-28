@@ -1,310 +1,405 @@
-<!-- src/components/recipient/longcare/LongCareDetail.vue -->
 <template>
   <div class="detail-card">
     <!-- 헤더 -->
     <header class="detail-header">
       <div class="title">
         <h3>만료 안내 상세</h3>
-        <span class="sub">{{ item.name }}님 장기요양등급 만료 안내</span>
+        <span class="sub">{{ detail?.beneficiaryName || '-' }}님 장기요양등급 만료 안내</span>
       </div>
-      <button type="button" class="close-btn" @click="onClose">
-        ✕
-      </button>
+      <button type="button" class="close-btn" @click="onClose">✕</button>
     </header>
 
-    <!-- 기본 정보 -->
-    <section class="info-section">
-      <div class="info-grid">
-        <div class="info-item">
-          <div class="label">수급자명</div>
-          <div class="value">{{ item.name }}</div>
-        </div>
-        <div class="info-item">
-          <div class="label">등급</div>
-          <div class="value">{{ item.grade || '요양등급 정보' }}</div>
-        </div>
-        <div class="info-item">
-          <div class="label">만료일</div>
-          <div class="value">{{ item.expiryDate }}</div>
-        </div>
-        <div class="info-item">
-          <div class="label">D-Day</div>
-          <div class="value">D-{{ item.dday }}</div>
-        </div>
-        <div class="info-item">
-          <div class="label">담당 요양보호사</div>
-          <div class="value">{{ item.worker || '-' }}</div>
-        </div>
-        <div class="info-item">
-          <div class="label">보호자 연락처</div>
-          <div class="value">{{ item.guardianPhone || '예: 010-1234-5678' }}</div>
-        </div>
-      </div>
-    </section>
+    <!-- 로딩/에러 -->
+    <div v-if="loading" class="state">불러오는 중...</div>
+    <div v-else-if="errorMsg" class="state error">{{ errorMsg }}</div>
 
-    <!-- ✅ 등급 연장 예정 체크 -->
-    <section class="extend-section">
-      <label class="extend-checkbox">
-        <input type="checkbox" v-model="extendPlanned" />
-        <span class="extend-label">등급 연장 예정</span>
-      </label>
-      <p class="extend-help">
-        체크 해제 시 만료 예정 리스트에서 제외됩니다
-      </p>
-    </section>
+    <template v-else>
+      <!-- 기본 정보 -->
+      <section class="info-section">
+        <div class="info-grid">
+          <div class="info-item">
+            <div class="label">수급자명</div>
+            <div class="value">{{ detail?.beneficiaryName || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">등급</div>
+            <div class="value">{{ detail?.careLevel || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">만료일</div>
+            <div class="value">{{ detail?.endDate || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">D-Day</div>
+            <div class="value">{{ detail?.ddayLabel || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">담당 요양보호사</div>
+            <div class="value">{{ detail?.careWorkerName || '-' }}</div>
+          </div>
+          <div class="info-item">
+            <div class="label">보호자 연락처</div>
+            <div class="value">{{ detail?.guardianPhone || '-' }}</div>
+          </div>
+        </div>
+      </section>
 
-    <!-- 안내 이력 -->
-    <section class="history-section">
-      <div class="section-title-row">
-        <span class="section-title">
-          안내 이력 [{{ history.length }}회]
-        </span>
-      </div>
+      <!-- ✅ 등급 연장 예정 체크 -->
+      <section class="extend-section">
+        <label class="extend-checkbox">
+          <input type="checkbox" v-model="extendPlanned" />
+          <span class="extend-label">등급 연장 예정</span>
+        </label>
+        <p class="extend-help">체크 해제 시 만료 예정 리스트에서 제외됩니다</p>
+      </section>
 
-      <div class="history-list">
-        <div
-          v-for="log in history"
-          :key="log.id"
-          class="history-item"
+      <!-- 안내 이력 -->
+      <section class="history-section">
+        <div class="section-title-row">
+          <span class="section-title">안내 이력 [{{ history.length }}회]</span>
+        </div>
+
+        <div class="history-list">
+          <div
+            v-for="log in history"
+            :key="log.noticeId"
+            class="history-item"
+          >
+            <div class="history-top">
+              <span class="history-date">{{ log.noticeDate }}</span>
+
+              <div class="history-right">
+                <span
+                  class="history-type"
+                  :class="log.type === '완료' ? 'type-complete' : 'type-missed'"
+                >
+                  {{ log.type }}
+                </span>
+
+                <!-- ✅ 수정/삭제 (디자인 크게 안 깨는 작은 버튼) -->
+                <button type="button" class="icon-btn" @click="startEdit(log)">수정</button>
+                <button type="button" class="icon-btn danger" @click="removeLog(log.noticeId)">삭제</button>
+              </div>
+            </div>
+
+            <div class="history-body">
+              <div class="history-title">{{ log.title }}</div>
+              <div class="history-memo">{{ log.memo }}</div>
+            </div>
+          </div>
+
+          <div v-if="history.length === 0" class="history-empty">
+            아직 등록된 안내 이력이 없습니다.
+          </div>
+        </div>
+      </section>
+
+      <!-- 입력 폼 -->
+      <section class="form-section">
+        <div class="form-grid">
+          <div class="form-item">
+            <label class="label">연락일자</label>
+            <input type="date" v-model="form.date" />
+          </div>
+          <div class="form-item">
+            <label class="label">담당자</label>
+            <input
+              type="text"
+              v-model="form.staff"
+              placeholder="담당자 이름을 입력하세요"
+            />
+          </div>
+        </div>
+
+        <div class="form-item full">
+          <label class="label">안내 내용</label>
+          <textarea
+            rows="3"
+            v-model="form.memo"
+            placeholder="보호자와 통화 내용, 재평가 일정 안내 등 상세 내용을 입력하세요."
+          />
+        </div>
+
+        <div class="form-item full" v-if="isEditing">
+          <div class="edit-hint">
+            현재 이력 수정 중입니다. (noticeId: {{ editingNoticeId }})
+            <button type="button" class="mini-btn" @click="cancelEdit">수정 취소</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 하단 버튼 -->
+      <footer class="detail-footer">
+        <button
+          type="button"
+          class="btn-secondary"
+          @click="recordAbsent"
+          :disabled="actionLoading"
         >
-          <div class="history-top">
-            <span class="history-date">{{ log.date }}</span>
-            <span
-              class="history-type"
-              :class="log.type === '완료' ? 'type-complete' : 'type-missed'"
-            >
-              {{ log.type }}
-            </span>
-          </div>
-          <div class="history-body">
-            <div class="history-title">
-              {{ log.title }}
-            </div>
-            <div class="history-memo">
-              {{ log.memo }}
-            </div>
-          </div>
-        </div>
+          부재중/미완료 기록
+        </button>
 
-        <div v-if="history.length === 0" class="history-empty">
-          아직 등록된 안내 이력이 없습니다.
-        </div>
-      </div>
-    </section>
+        <button
+          v-if="!isEditing"
+          type="button"
+          class="btn-primary"
+          @click="addComplete"
+          :disabled="actionLoading"
+        >
+          안내 완료 처리
+        </button>
 
-    <!-- 최근 안내 완료 -->
-    <section class="recent-section" v-if="lastComplete">
-      <div class="recent-header">
-        <span class="recent-icon">✅</span>
-        <div>
-          <div class="recent-title">최근 안내 완료</div>
-          <div class="recent-sub">
-            {{ lastComplete.date }} · 담당자 {{ lastComplete.staff }}
-          </div>
-        </div>
-      </div>
-      <div class="recent-body">
-        <div class="recent-field">
-          <div class="label">안내 내용</div>
-          <div class="value">{{ lastComplete.memo }}</div>
-        </div>
-        <div class="recent-field" v-if="lastComplete.nextDate">
-          <div class="label">다음 연락 예정일</div>
-          <div class="value">{{ lastComplete.nextDate }}</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 입력 폼 (안내 완료 처리 전만 표시) -->
-    <section class="form-section" v-if="!isCompletedMode">
-      <div class="form-grid">
-        <div class="form-item">
-          <label class="label">연락일자</label>
-          <input
-            type="date"
-            v-model="form.date"
-          />
-        </div>
-        <div class="form-item">
-          <label class="label">담당자</label>
-          <input
-            type="text"
-            v-model="form.staff"
-            placeholder="담당자 이름을 입력하세요"
-          />
-        </div>
-      </div>
-
-      <div class="form-item full">
-        <label class="label">안내 내용</label>
-        <textarea
-          rows="3"
-          v-model="form.memo"
-          placeholder="보호자와 통화 내용, 재평가 일정 안내 등 상세 내용을 입력하세요."
-        />
-      </div>
-
-      <div class="form-item full">
-        <label class="label">다음 연락 예정일</label>
-        <input
-          type="date"
-          v-model="form.nextDate"
-        />
-      </div>
-    </section>
-
-    <!-- 하단 버튼 -->
-    <!-- 안내 완료 처리 전: 두 개 버튼 -->
-    <footer class="detail-footer" v-if="!isCompletedMode">
-      <button
-        type="button"
-        class="btn-secondary"
-        @click="addMissed"
-      >
-        부재중/미완료 기록
-      </button>
-
-      <button
-        type="button"
-        class="btn-primary"
-        @click="addComplete"
-      >
-        안내 완료 처리
-      </button>
-    </footer>
-
-    <!-- 안내 완료 처리 후: 안내 취소 버튼만 -->
-    <footer class="detail-footer single" v-else>
-      <button
-        type="button"
-        class="btn-cancel"
-        @click="cancelComplete"
-      >
-        안내 취소
-      </button>
-    </footer>
+        <button
+          v-else
+          type="button"
+          class="btn-primary"
+          @click="saveEdit"
+          :disabled="actionLoading"
+        >
+          안내 이력 변경
+        </button>
+      </footer>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import api from '@/lib/api'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
-  item: {
-    type: Object,
-    required: true,
-  },
+  expirationId: { type: [Number, String], required: true }
+})
+const emit = defineEmits(['close', 'refresh'])
+
+const userStore = useUserStore()
+const myEmpId = computed(() => {
+  // ✅ empId가 없으면 null 반환
+  return userStore?.user?.empId ?? userStore?.empId ?? 1    // 로그인 적용하면 empId를 확보해서 자동 주입해야 함
 })
 
-const emit = defineEmits(['close', 'change-extend'])
+const loading = ref(false)
+const errorMsg = ref('')
 
+const actionLoading = ref(false)
+
+const detail = ref(null)
 const history = ref([])
-const lastComplete = ref(null)
-const isCompletedMode = ref(false)
-const extendPlanned = ref(true) // 체크박스 상태
 
+/** 연장 예정 체크박스 */
+const extendPlanned = ref(true)
+
+/** 폼 */
 const today = () => new Date().toISOString().slice(0, 10)
-
 const form = ref({
   date: today(),
   staff: '',
   memo: '',
-  nextDate: '',
 })
 
-watch(
-  () => props.item,
-  (val) => {
-    if (!val) return
+/** 수정 모드 */
+const isEditing = ref(false)
+const editingNoticeId = ref(null)
 
-    // (샘플) 선택 시 기본 한 건 세팅
-    history.value = [
-      {
-        id: 1,
-        date: `${val.expiryDate}`,
-        type: '완료',
-        title: '사전 안내 완료',
-        memo: '보호자에게 재평가 필요성 및 준비 서류 안내.',
-      },
-    ]
-    lastComplete.value = null
-    isCompletedMode.value = false
+const autoAbsentMemo = '연락 시도했으나 부재중. 추후 재연락 필요.'
 
-    // ✅ 등급 연장 예정 기본값: true (또는 기존 값 사용)
-    if (val.extendPlanned === undefined) {
-      val.extendPlanned = true
-    }
-    extendPlanned.value = val.extendPlanned
-
-    form.value = {
-      date: today(),
-      staff: val.worker || '',
-      memo: '',
-      nextDate: '',
-    }
-  },
-  { immediate: true }
-)
-
-// 체크박스 상태가 바뀌면 item 객체에 반영 + 이벤트 발행
-watch(extendPlanned, (val) => {
-  if (props.item) {
-    props.item.extendPlanned = val
+const toHistoryItem = (it) => {
+  const memo = it?.memo ?? ''
+  const type = memo === autoAbsentMemo ? '부재중' : '완료'
+  return {
+    noticeId: it.noticeId,
+    noticeDate: it.noticeDate,
+    memo,
+    empId: it.empId,
+    type,
+    title: type === '부재중' ? '부재중 - 재연락 필요' : '만료 안내 완료',
   }
-  emit('change-extend', { id: props.item?.id, extendPlanned: val })
-})
-
-const nextHistoryId = () =>
-  (history.value[history.value.length - 1]?.id || 0) + 1
-
-const addMissed = () => {
-  const log = {
-    id: nextHistoryId(),
-    date: form.value.date || today(),
-    type: '부재중',
-    title: '부재중 - 재연락 필요',
-    memo: '연락 시도했으나 부재중. 추후 재연락 필요.',
-  }
-  history.value.push(log)
 }
 
-const addComplete = () => {
-  if (!form.value.staff || !form.value.memo) {
-    alert('담당자와 안내 내용을 입력해주세요.')
+const fetchDetail = async () => {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const { data } = await api.get(`/api/care-level/expirations/${props.expirationId}`)
+    detail.value = data || null
+
+    // ✅ extendsStatus: null or 'Y' => 체크 true / 'N' => false
+    extendPlanned.value = (detail.value?.extendsStatus ?? 'Y') !== 'N'
+
+    // form 기본값
+    form.value.staff = detail.value?.careWorkerName || ''
+    form.value.date = today()
+    form.value.memo = ''
+  } catch (e) {
+    console.error(e)
+    errorMsg.value = '상세 정보를 불러오지 못했습니다.'
+    detail.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchNotices = async () => {
+  try {
+    const { data } = await api.get(`/api/care-level/expirations/${props.expirationId}/notices`)
+    const items = data?.items ?? []
+    history.value = items.map(toHistoryItem)
+  } catch (e) {
+    console.error(e)
+    history.value = []
+  }
+}
+
+const reloadAll = async () => {
+  await fetchDetail()
+  await fetchNotices()
+}
+
+/** ✅ 연장예정 체크 변경 -> PATCH */
+watch(extendPlanned, async (val) => {
+  // detail 로딩 전에는 실행하지 않게
+  if (!detail.value) return
+
+  try {
+    const extendsStatus = val ? 'Y' : 'N'
+    await api.patch(`/api/care-level/expirations/${props.expirationId}/extends`, {
+      extendsStatus
+    })
+
+    // ✅ detail에도 반영
+    detail.value.extendsStatus = extendsStatus
+
+    // ✅ 체크 해제 시 목록에서 제외되므로 부모에게 refresh 신호
+    emit('refresh')
+  } catch (e) {
+    console.error(e)
+    // 실패 시 UI 롤백
+    extendPlanned.value = !val
+    alert('연장 예정 상태 변경에 실패했습니다.')
+  }
+})
+
+/** ✅ 부재중 기록 */
+const recordAbsent = async () => {
+  actionLoading.value = true
+  try {
+    await api.post(`/api/care-level/expirations/${props.expirationId}/notices/absent`, null, {
+      params: { empId: myEmpId.value }
+    })
+    await fetchNotices()
+    emit('refresh') // 목록 noticeLabel 갱신 필요할 수 있음
+  } catch (e) {
+    console.error(e)
+    alert('부재중/미완료 기록에 실패했습니다.')
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+/** ✅ 안내 완료 처리 (insertNotice + outbound Y) */
+const addComplete = async () => {
+  if (!form.value.memo) {
+    alert('안내 내용을 입력해주세요.')
     return
   }
+  actionLoading.value = true
+  try {
+    // 백엔드가 "yyyy-MM-dd HH:mm:ss"도 허용하지만
+    // 여기서는 date input만 쓰니까 "YYYY-MM-DD"로 전달
+    await api.post(`/api/care-level/expirations/${props.expirationId}/notices/complete`, {
+      noticeDate: form.value.date,
+      memo: form.value.memo,
+      empId: myEmpId.value
+    })
 
-  const log = {
-    id: nextHistoryId(),
-    date: form.value.date || today(),
-    type: '완료',
-    title: '만료 안내 완료',
-    memo: form.value.memo,
-    nextDate: form.value.nextDate,
+    form.value.memo = ''
+    await fetchNotices()
+    emit('refresh')
+  } catch (e) {
+    console.error(e)
+    alert('안내 완료 처리에 실패했습니다.')
+  } finally {
+    actionLoading.value = false
   }
-  history.value.push(log)
+}
 
-  lastComplete.value = {
-    date: log.date,
-    staff: form.value.staff,
-    memo: form.value.memo,
-    nextDate: form.value.nextDate,
-  }
+/** ✅ 수정 시작 (폼에 채우기) */
+const startEdit = (log) => {
+  isEditing.value = true
+  editingNoticeId.value = log.noticeId
 
-  isCompletedMode.value = true
+  // 날짜 input은 YYYY-MM-DD만 받으니까 noticeDate에서 앞부분만
+  const d = String(log.noticeDate || '').slice(0, 10)
+  form.value.date = d || today()
+  form.value.memo = log.memo || ''
+  // staff는 화면 유지용
+  form.value.staff = form.value.staff || ''
+}
 
-  // 안내 완료 후 메모만 비워줌
+/** ✅ 수정 취소 */
+const cancelEdit = () => {
+  isEditing.value = false
+  editingNoticeId.value = null
+  form.value.date = today()
   form.value.memo = ''
 }
 
-// 이력/최근 완료는 그대로 두고, 폼/버튼 UI만 원래대로 복귀
-const cancelComplete = () => {
-  isCompletedMode.value = false
+/** ✅ 안내 이력 변경 PUT */
+const saveEdit = async () => {
+  if (!editingNoticeId.value) return
+  if (!form.value.memo) {
+    alert('안내 내용을 입력해주세요.')
+    return
+  }
+
+  actionLoading.value = true
+  try {
+    await api.put(`/api/care-level/expirations/${props.expirationId}/notices/${editingNoticeId.value}`, {
+      noticeDate: form.value.date,
+      memo: form.value.memo,
+      empId: myEmpId.value
+    })
+
+    await fetchNotices()
+    cancelEdit()
+    emit('refresh')
+  } catch (e) {
+    console.error(e)
+    alert('안내 이력 변경에 실패했습니다.')
+  } finally {
+    actionLoading.value = false
+  }
 }
 
-const onClose = () => {
-  emit('close')
+/** ✅ 안내 이력 삭제 DELETE */
+const removeLog = async (noticeId) => {
+  if (!confirm('해당 안내 이력을 삭제할까요?')) return
+  actionLoading.value = true
+  try {
+    await api.delete(`/api/care-level/expirations/${props.expirationId}/notices/${noticeId}`)
+    await fetchNotices()
+    emit('refresh')
+  } catch (e) {
+    console.error(e)
+    alert('안내 이력 삭제에 실패했습니다.')
+  } finally {
+    actionLoading.value = false
+  }
 }
+
+const onClose = () => emit('close')
+
+watch(
+  () => props.expirationId,
+  async () => {
+    detail.value = null
+    history.value = []
+    cancelEdit()
+    await reloadAll()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -318,6 +413,15 @@ const onClose = () => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* 상태 */
+.state {
+  font-size: 12px;
+  color: #6b7280;
+}
+.state.error {
+  color: #b91c1c;
 }
 
 /* 헤더 */
@@ -380,9 +484,7 @@ const onClose = () => {
   width: 14px;
   height: 14px;
 }
-.extend-label {
-  font-weight: 500;
-}
+.extend-label { font-weight: 500; }
 .extend-help {
   margin: 2px 0 0;
   font-size: 11px;
@@ -425,6 +527,13 @@ const onClose = () => {
   font-size: 11px;
   color: #1e3a8a;
 }
+
+.history-right{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
 .history-type {
   font-size: 11px;
   padding: 2px 8px;
@@ -438,6 +547,19 @@ const onClose = () => {
   background: #fee2e2;
   color: #b91c1c;
 }
+
+.icon-btn{
+  border:none;
+  background: transparent;
+  font-size: 11px;
+  color:#374151;
+  cursor:pointer;
+  padding:2px 4px;
+}
+.icon-btn.danger{
+  color:#b91c1c;
+}
+
 .history-title {
   font-size: 12px;
   font-weight: 600;
@@ -450,34 +572,6 @@ const onClose = () => {
 .history-empty {
   font-size: 12px;
   color: #9ca3af;
-}
-
-/* 최근 안내 완료 */
-.recent-section {
-  border-radius: 12px;
-  background: #f0fdf4;
-  padding: 10px 12px;
-}
-.recent-header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 6px;
-}
-.recent-icon {
-  font-size: 18px;
-}
-.recent-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #166534;
-}
-.recent-sub {
-  font-size: 11px;
-  color: #4b5563;
-}
-.recent-field + .recent-field {
-  margin-top: 4px;
 }
 
 /* 폼 영역 */
@@ -519,6 +613,23 @@ textarea:focus {
   border-color: #22c55e;
 }
 
+.edit-hint{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  font-size: 11px;
+  color:#6b7280;
+}
+.mini-btn{
+  border:none;
+  background:#e5e7eb;
+  color:#374151;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor:pointer;
+}
+
 /* 버튼 */
 .detail-footer {
   margin-top: 4px;
@@ -543,20 +654,9 @@ textarea:focus {
   background: #fed7aa;
   color: #92400e;
 }
-
-/* 안내 취소 상태용 */
-.detail-footer.single {
-  gap: 0;
-}
-.btn-cancel {
-  width: 100%;
-  border-radius: 999px;
-  border: none;
-  padding: 10px 0;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  background: #e5e7eb;
-  color: #374151;
+.btn-primary:disabled,
+.btn-secondary:disabled{
+  opacity:.6;
+  cursor:not-allowed;
 }
 </style>

@@ -7,14 +7,15 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
 public class StageData {
     private int stage;    // 1, 2, 3, 4
-    private String process_status;
+    private String processStatus;
     private LocalDateTime processTime;
     private LocalDateTime month;
     private String htmlCode;
-    private BigInteger potentialId;
+    private BigInteger customerId;
 }

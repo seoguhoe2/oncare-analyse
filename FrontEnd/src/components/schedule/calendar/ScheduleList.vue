@@ -68,6 +68,7 @@
     selectedDate: { type: String, default: '' }, // "YYYY-MM-DD"
     keyword: { type: String, default: '' },
     searchScope: { type: String, default: 'ALL' }, // BENEFICIARY | CAREWORKER | SERVICE | ALL
+    refreshKey: { type: Number, default: 0 }, 
   });
   
   const emit = defineEmits(['select-schedule']);
@@ -202,7 +203,7 @@
   
   let timer = null;
   watch(
-    () => [props.selectedDate, props.keyword, props.searchScope],
+    () => [props.selectedDate, props.keyword, props.searchScope, props.refreshKey],
     () => {
       clearTimeout(timer);
       timer = setTimeout(loadDay, 250);

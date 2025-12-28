@@ -1,41 +1,48 @@
-<!-- src/components/recipient/category/servicerental/Rental.vue -->
+<!-- src/components/recipient/main/category/servicerental/Rental.vue -->
 <template>
   <div class="rental-wrapper">
     <!-- 현재 사용 중인 용품 -->
     <section class="rental-section current">
       <div class="rental-header">
         <h4>현재 사용 중인 용품</h4>
-        <span class="rental-count">
-          총 {{ currentRentalItems.length }}개
-        </span>
+        <span class="rental-count">총 {{ currentItems.length }}개</span>
       </div>
+
       <ul class="svc-card-list">
+        <li v-if="!beneficiaryId" class="empty">수급자를 선택해주세요.</li>
+        <li v-else-if="loading" class="empty">불러오는 중...</li>
+        <li v-else-if="errorMsg" class="empty">{{ errorMsg }}</li>
+        <li v-else-if="currentItems.length === 0" class="empty">현재 렌탈 용품이 없습니다.</li>
+
         <li
-          v-for="item in currentRentalItems"
-          :key="item.code"
+          v-else
+          v-for="item in currentItems"
+          :key="itemKey(item)"
           class="svc-card rental-card current"
           @click="openModal(item, 'current')"
         >
           <div class="svc-left">
-            <span class="pill code-pill">{{ item.code }}</span>
-            <span class="svc-name">{{ item.name }}</span>
-            <span class="pill status-pill using">
-              {{ item.status || '계약중' }}
+            <span class="pill code-pill">{{ item.productAssetId }}</span>
+            <span class="svc-name">{{ item.productName }}</span>
+
+            <!-- ✅ 상태에 따라 색상 변경 -->
+            <span
+              class="pill status-pill"
+              :class="statusPillClass(item.contractStatusName)"
+            >
+              {{ item.contractStatusName || "계약중" }}
             </span>
           </div>
+
           <div class="svc-right">
             <span class="rental-meta">
-              {{ item.startDate || item.period }}
+              {{ item.startDate }} ~ {{ item.endDate || "진행중" }}
             </span>
-            <span class="svc-amount">
-              {{ formatCurrency(item.amount) }}
-            </span>
+            <span class="svc-amount">{{ formatCurrency(item.monthlyAmount) }}</span>
             <span class="pill month-pill">
-              {{ item.durationLabel || (item.count ? item.count + '개월' : '') }}
+              {{ item.durationMonths ? item.durationMonths + "개월" : "" }}
             </span>
-            <span class="svc-status">
-              {{ item.memo || '1년 계약' }}
-            </span>
+            <span class="svc-status">상세</span>
           </div>
         </li>
       </ul>
@@ -45,37 +52,44 @@
     <section class="rental-section past">
       <div class="rental-header">
         <h4>과거 렌탈 이력</h4>
-        <span class="rental-count">
-          총 {{ pastRentalItems.length }}개
-        </span>
+        <span class="rental-count">총 {{ historyItems.length }}개</span>
       </div>
+
       <ul class="svc-card-list">
+        <li v-if="!beneficiaryId" class="empty">수급자를 선택해주세요.</li>
+        <li v-else-if="loading" class="empty">불러오는 중...</li>
+        <li v-else-if="errorMsg" class="empty">{{ errorMsg }}</li>
+        <li v-else-if="historyItems.length === 0" class="empty">과거 렌탈 이력이 없습니다.</li>
+
         <li
-          v-for="item in pastRentalItems"
-          :key="item.code"
+          v-else
+          v-for="item in historyItems"
+          :key="itemKey(item)"
           class="svc-card rental-card"
           @click="openModal(item, 'past')"
         >
           <div class="svc-left">
-            <span class="pill code-pill">{{ item.code }}</span>
-            <span class="svc-name">{{ item.name }}</span>
-            <span class="pill status-pill done">
-              {{ item.status || '계약완료' }}
+            <span class="pill code-pill">{{ item.productAssetId }}</span>
+            <span class="svc-name">{{ item.productName }}</span>
+
+            <!-- ✅ 과거는 기본 회색이지만, 종료면 확실히 회색으로 -->
+            <span
+              class="pill status-pill"
+              :class="statusPillClass(item.contractStatusName)"
+            >
+              {{ item.contractStatusName || "종료" }}
             </span>
           </div>
+
           <div class="svc-right">
             <span class="rental-meta">
-              {{ item.startDate || item.period }}
+              {{ item.startDate }} ~ {{ item.endDate || "-" }}
             </span>
-            <span class="svc-amount">
-              {{ formatCurrency(item.amount) }}
-            </span>
+            <span class="svc-amount">{{ formatCurrency(item.monthlyAmount) }}</span>
             <span class="pill month-pill">
-              {{ item.durationLabel || (item.count ? item.count + '개월' : '') }}
+              {{ item.durationMonths ? item.durationMonths + "개월" : "" }}
             </span>
-            <span class="svc-status">
-              {{ item.memo || '' }}
-            </span>
+            <span class="svc-status">상세</span>
           </div>
         </li>
       </ul>
@@ -84,48 +98,91 @@
     <!-- ✅ 모달 -->
     <RentalModal
       v-model="showModal"
-      :item="selectedRental"
+      :beneficiary-id="beneficiaryId"
       :type="selectedType"
-      @complete="handleComplete"
+      :summary-item="selectedRental"
+      @completed="handleCompleted"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import RentalModal from '../modal/RentalModal.vue'
+import { onMounted, ref, watch } from "vue";
+import api from "@/lib/api";
+import RentalModal from "../modal/RentalModal.vue";
 
 const props = defineProps({
-  rentalItems: {
-    type: Array,
-    default: () => []
+  beneficiaryId: { type: Number, default: null },
+});
+
+const loading = ref(false);
+const errorMsg = ref("");
+
+const currentItems = ref([]);
+const historyItems = ref([]);
+
+const showModal = ref(false);
+const selectedRental = ref(null);
+const selectedType = ref("current");
+
+const itemKey = (it) => `${it.rentalContractId}-${it.productAssetId}`;
+const formatCurrency = (n) => `${(n ?? 0).toLocaleString("ko-KR")}원`;
+
+/**
+ * ✅ 상태 뱃지 클래스
+ * - 종료면 "서비스 해지(state-off)"와 동일한 회색 계열로
+ */
+const statusPillClass = (statusName) => {
+  const s = String(statusName || "").trim();
+  if (s === "종료") return "ended"; // ✅ 서비스 해지 색과 동일
+  return "using"; // 나머지는 기본 초록(사용중 느낌)
+};
+
+const fetchRentals = async () => {
+  if (!props.beneficiaryId) {
+    currentItems.value = [];
+    historyItems.value = [];
+    return;
   }
-})
 
-const showModal = ref(false)
-const selectedRental = ref(null)
-const selectedType = ref('current')
-
-const currentRentalItems = computed(() =>
-  props.rentalItems.filter((item) => item.status === '계약중' || item.status === '사용중')
-)
-const pastRentalItems = computed(() =>
-  props.rentalItems.filter((item) => item.status === '계약완료' || item.status === '반납완료')
-)
-
-const formatCurrency = (n) =>
-  (n ?? 0).toLocaleString('ko-KR') + '원'
+  loading.value = true;
+  errorMsg.value = "";
+  try {
+    const { data } = await api.get(`/api/beneficiaries/${props.beneficiaryId}/rentals`);
+    currentItems.value = data?.current ?? [];
+    historyItems.value = data?.history ?? [];
+  } catch (e) {
+    console.error(e);
+    currentItems.value = [];
+    historyItems.value = [];
+    errorMsg.value = "렌탈 정보를 불러오지 못했습니다.";
+  } finally {
+    loading.value = false;
+  }
+};
 
 const openModal = (item, type) => {
-  selectedRental.value = item
-  selectedType.value = type
-  showModal.value = true
-}
+  selectedRental.value = item;
+  selectedType.value = type;
+  showModal.value = true;
+};
 
-const handleComplete = (item) => {
-  // 여기서 계약 완료 처리(API 호출 등) 넣으면 됨
-  console.log('계약 완료로 변경 클릭:', item)
-}
+// ✅ 모달에서 완료처리 성공하면 목록 재조회
+const handleCompleted = async (res) => {
+  if (res?.success) await fetchRentals();
+};
+
+onMounted(fetchRentals);
+
+watch(
+  () => props.beneficiaryId,
+  () => {
+    showModal.value = false;
+    selectedRental.value = null;
+    selectedType.value = "current";
+    fetchRentals();
+  }
+);
 </script>
 
 <style scoped>
@@ -135,12 +192,12 @@ const handleComplete = (item) => {
   gap: 10px;
 }
 
-/* 공통 카드 스타일 (Service.vue와 동일) */
 .svc-card-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
+
 .svc-card {
   display: flex;
   justify-content: space-between;
@@ -176,7 +233,6 @@ const handleComplete = (item) => {
   color: #6b7280;
 }
 
-/* pill 공통 */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -193,18 +249,22 @@ const handleComplete = (item) => {
   background-color: #eef2ff;
   color: #4f46e5;
 }
+
+/* ✅ 상태 뱃지 */
 .status-pill.using {
   background-color: #dcfce7;
   color: #15803d;
 }
-.status-pill.done {
-  background-color: #e5e7eb;
-  color: #4b5563;
+/* ✅ 종료면 "서비스 해지(state-off)"와 동일 */
+.status-pill.ended {
+  background-color: #e5e7eb; /* state-off 배경 */
+  color: #374151;           /* state-off 글자 */
 }
 
 .rental-section.current .svc-card {
   background-color: #ecfdf3;
 }
+
 .rental-header {
   display: flex;
   justify-content: space-between;
@@ -222,6 +282,12 @@ const handleComplete = (item) => {
 .rental-meta {
   color: #6b7280;
   font-size: 11px;
+}
+
+.empty {
+  padding: 14px 10px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 @media (max-width: 1200px) {

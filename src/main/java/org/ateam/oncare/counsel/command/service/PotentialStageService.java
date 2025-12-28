@@ -2,6 +2,7 @@ package org.ateam.oncare.counsel.command.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ateam.oncare.counsel.command.dto.StageData;
 import org.ateam.oncare.counsel.command.dto.Subscription;
 import org.ateam.oncare.counsel.command.entity.PotentialStage;
 import org.ateam.oncare.counsel.command.repository.PotentialStageRepository;
@@ -9,8 +10,10 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -48,7 +51,16 @@ public class PotentialStageService {
         }
     }
 
-    public Map<Integer, String> findStageDataByPotentialId(Long potentialId) {
-
+    public Map<Integer, StageData> findStageDataByPotentialId(Long potentialId) {
+        List<PotentialStage> stages = potentialStageRepository.findAllByPotentialCustomerId(potentialId);
+        return stages.stream().collect(Collectors.toMap(
+                PotentialStage::getStage,
+                entity -> StageData.builder()
+                        .processStatus(entity.getProcessStatus())
+                        .processTime(entity.getProcessTime())
+                        .month(entity.getMonth())
+                        .htmlCode(entity.getHtmlCode())
+                        .build()
+        ));
     }
 }

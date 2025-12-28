@@ -13,11 +13,13 @@ export const useUserStore = defineStore(
     const roles         = ref([]);
     const profile       = ref('');
     const token         = ref('');
+    const tokenType     = ref('');
     const isLoggedIn    = ref(false); 
     const birth         = ref('');
     const gender        = ref('');
     const phone         = ref('');
     const jobName       = ref('');
+    
     
     // ----- Actions -----
     function logIn(
@@ -44,6 +46,7 @@ export const useUserStore = defineStore(
       profile.value    = ''
       roles.value      = []
       token.value      = ''
+      tokenType.value  = ''
       userId.value     = 0
       isLoggedIn.value = false
       birth.value      = ''
@@ -54,8 +57,9 @@ export const useUserStore = defineStore(
       sessionStorage.removeItem('aiExercisePlan')
     }
 
-    function setToken(jwtToken) {
-      token.value = jwtToken 
+    function setToken(jwtToken,token_type) {
+      token.value = jwtToken ;
+      tokenType.value = token_type;
     }
 
     function changeProfile(newProfile) {
@@ -93,6 +97,7 @@ export const useUserStore = defineStore(
       roles,
       profile,
       token,
+      tokenType,
       isLoggedIn,
       userId,
       gender,
@@ -125,6 +130,7 @@ export const useUserStore = defineStore(
         'phone',
         'birth',
         'token',
+        'tokenType',
         'isLoggedIn',
         'userId',
         'jobName'

@@ -1,32 +1,48 @@
 <script setup>
-import { userProfile } from '@/mock/careworker/homeData';
+import { computed } from 'vue';
+import { useUserStore } from '@/stores/user';
+import { useRouter } from 'vue-router';
+
+const userStore = useUserStore();
+const router = useRouter();
+
+// 사용자 정보를 Pinia store에서 가져옴
+const userName = computed(() => userStore.name || '사용자');
+const userRole = computed(() => userStore.jobName || '요양보호사');
+const userEmail = computed(() => userStore.email || '');
+
+// 현재 날짜 포맷팅
+const currentDate = computed(() => {
+  const today = new Date();
+  const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+  return today.toLocaleDateString('ko-KR', options);
+});
+
+// 이름의 첫 글자 (프로필 서클용)
+const nameInitial = computed(() => {
+  return userName.value.charAt(0);
+});
+
+// 로그아웃 처리
+const handleLogout = () => {
+  userStore.logOut();
+  router.push({ name: 'signin' });
+};
 </script>
 
 <template>
   <header class="dashboard-header">
     <div class="user-info-container">
-      <div class="user-avatar">
-        <span class="avatar-icon">👤</span>
-      </div>
       <div class="user-info">
-        <h1 class="user-name">안녕하세요, {{ userProfile.name }} {{ userProfile.role }}님</h1>
-        <p class="date">{{ userProfile.date }}</p>
+        <h1 class="user-name">
+          <span class="greeting-text">안녕하세요, </span>
+          <span class="name-text">{{ userName }}</span>
+          <span class="greeting-text"> {{ userRole }}님</span>
+        </h1>
+        <p class="date">{{ currentDate }}</p>
       </div>
     </div>
-    
-    <div class="header-actions">
-      <div class="notification-badge">
-        <span class="bell-icon">🔔</span>
-        <div class="noti-text">
-          <span class="noti-name">{{ userProfile.name }} 요양보호사</span>
-          <span class="noti-email">caregiving@welfare.com</span>
-        </div>
-        <div class="profile-circle">김</div>
-      </div>
-      <button class="logout-btn">
-        <span class="logout-icon">↪</span> 로그아웃
-      </button>
-    </div>
+
   </header>
 </template>
 
@@ -67,15 +83,22 @@ import { userProfile } from '@/mock/careworker/homeData';
 }
 
 .user-name {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1f2937;
+  font-size: 30px;
+  font-weight: 600;
   margin: 0;
 }
 
+.greeting-text {
+  color: #000000;
+}
+
+.name-text {
+  color: #1a5928;
+}
+
 .date {
-  font-size: 0.875rem;
-  color: #6b7280;
+  font-size: 14px;
+  color: #4a5565;
   margin: 0.25rem 0 0 0;
 }
 

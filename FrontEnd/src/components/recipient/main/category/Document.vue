@@ -1,92 +1,89 @@
-<!-- src/components/recipient/category/Document.vue -->
+<!-- src/components/recipient/main/category/Document.vue -->
 <template>
   <div>
     <div class="files-header">
       총 {{ documents.length }}개의 문서
     </div>
-    <div class="file-grid">
+
+    <div v-if="loading" class="empty">불러오는 중...</div>
+    <div v-else-if="!documents.length" class="empty">서류가 없습니다.</div>
+
+    <div v-else class="file-grid">
       <div
         v-for="doc in documents"
-        :key="doc.id"
+        :key="doc.formId"
         class="file-card"
         @click="openModal(doc)"
       >
-        <div class="file-icon">
-          📄
-          <span class="file-status-dot" :class="doc.statusClass"></span>
-        </div>
-        <div class="file-name">{{ doc.name }}</div>
+        <div class="file-icon">📄</div>
+        <div class="file-name">{{ doc.categoryName }}</div>
         <div class="file-meta">
-          <span>{{ doc.size }}</span>
-          <span>· {{ doc.date }}</span>
+          <span>{{ doc.fileSize }}</span>
+          <span>· {{ doc.createdAt }}</span>
         </div>
       </div>
     </div>
 
-    <!-- ✅ 문서 상세 모달 -->
     <DocumentModal
       v-model="showModal"
+      :beneficiary-id="beneficiaryId"
+      :form-id="selectedFormId"
       :document="selectedDocument"
-      @preview="handlePreview"
-      @download="handleDownload"
-      @delete="handleDelete"
     />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import api from '@/lib/api'
 import DocumentModal from './modal/DocumentModal.vue'
 
-const documents = ref([
-  {
-    id: 1,
-    name: '방문요양 업무수행일지',
-    size: '124KB',
-    date: '2024-11-15',
-    type: 'PDF',
-    statusClass: 'status-red'
-  },
-  {
-    id: 2,
-    name: '장기요양급여 제공기록지(방문요양)',
-    size: '500KB',
-    date: '2024-11-10',
-    type: 'PDF',
-    statusClass: 'status-green'
-  },
-  {
-    id: 3,
-    name: '개인정보 수집 및 이용 동의서',
-    size: '420KB',
-    date: '2024-10-20',
-    type: 'PDF',
-    statusClass: 'status-blue'
-  }
-])
+const props = defineProps({
+  beneficiaryId: { type: [Number, String], required: true },
+  refreshKey: Number
+})
+
+const loading = ref(false)
+const documents = ref([])
 
 const showModal = ref(false)
+const selectedFormId = ref(null)
 const selectedDocument = ref(null)
+
+const fetchDocuments = async () => {
+  if (!props.beneficiaryId) return
+  loading.value = true
+  try {
+    const { data } = await api.get(`/api/beneficiaries/${props.beneficiaryId}/forms`)
+    documents.value = Array.isArray(data) ? data : (data?.items ?? [])
+  } catch (e) {
+    console.error('서류 목록 조회 실패:', e)
+    documents.value = []
+  } finally {
+    loading.value = false
+  }
+}
 
 const openModal = (doc) => {
   selectedDocument.value = doc
+  selectedFormId.value = doc?.formId ?? null
   showModal.value = true
 }
 
-const handlePreview = (doc) => {
-  console.log('미리보기 클릭:', doc)
-  // TODO: 파일 미리보기 로직 연결
-}
-
-const handleDownload = (doc) => {
-  console.log('다운로드 클릭:', doc)
-  // TODO: 파일 다운로드 로직 연결
-}
-
-const handleDelete = (doc) => {
-  console.log('삭제 클릭:', doc)
-  // TODO: 삭제 확인 모달 or API 연동
-}
+onMounted(fetchDocuments)
+watch(() => props.beneficiaryId, fetchDocuments)
+watch(
+  () => [props.beneficiaryId, props.refreshKey],
+  () => {
+    documents.value = []
+    showModal.value = false
+    selectedFormId.value = null
+    selectedDocument.value = null
+    fetchDocuments()
+  }
+  // },
+  // { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -95,11 +92,13 @@ const handleDelete = (doc) => {
   color: #6b7280;
   margin-bottom: 6px;
 }
+
 .file-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 10px;
 }
+
 .file-card {
   border-radius: 12px;
   padding: 10px 8px;
@@ -108,38 +107,32 @@ const handleDelete = (doc) => {
   font-size: 12px;
   cursor: pointer;
 }
+
 .file-card:hover {
   background-color: #e5f2ff;
 }
+
 .file-icon {
   font-size: 20px;
   position: relative;
   margin-bottom: 4px;
 }
-.file-status-dot {
-  position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  border: 2px solid #f9fafb;
-}
-.status-red {
-  background-color: #ef4444;
-}
-.status-green {
-  background-color: #22c55e;
-}
-.status-blue {
-  background-color: #3b82f6;
-}
+
 .file-name {
   font-weight: 500;
   margin-bottom: 2px;
 }
+
 .file-meta {
   font-size: 11px;
   color: #6b7280;
+}
+
+.empty {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
 }
 </style>

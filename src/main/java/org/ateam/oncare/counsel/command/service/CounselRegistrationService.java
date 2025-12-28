@@ -21,9 +21,8 @@ public class CounselRegistrationService {
     private final BeneficiaryUpdateService beneficiaryUpdateService;
     private final PotentialCustomerRepository potentialCustomerRepository;
 
-    public NewSubscriptionResponse registSubscription(Subscription request) {
-        CounselHistory counselHistory = saveCounselHistory(request);
-        return buildSubscriptionResponse(counselHistory);
+    public CounselHistory registSubscription(CounselHistoryRequired request) {
+        return saveCounselHistory(request);
     }
 
     public GeneralCounselResponse registGeneralCounsel(GeneralCounsel request) {
@@ -64,26 +63,5 @@ public class CounselRegistrationService {
 
     }
 
-    private NewSubscriptionResponse buildSubscriptionResponse(CounselHistory counselHistory) {
-        NewSubscriptionResponse response = new NewSubscriptionResponse();
-        response.setCounselHistoryId(BigInteger.valueOf(counselHistory.getId()));
-        response.setCounselCategoryId(counselHistory.getCounselCategoryId());
-        response.setDetail(counselHistory.getDetail());
-        response.setSummary(counselHistory.getSummary());
-        response.setFollowUp(counselHistory.getFollowUp());
-        response.setFollowUpNecessary(counselHistory.getFollowUpNecessary());
-        response.setChurn(counselHistory.getChurn());
-        response.setChurnReason(counselHistory.getChurnReason());
-        response.setCounselorId(counselHistory.getCounselorId());
-        response.setConsultDate(counselHistory.getConsultDate());
-        response.setReservationChannelId(counselHistory.getReservationChannelId());
-        if(counselHistory.getBeneficiaryId() != null) {
-            response.setBeneficiaryId(BigInteger.valueOf(counselHistory.getBeneficiaryId()));
-            response.setPotentialId(null);
-        } else {
-            response.setBeneficiaryId(null);
-            response.setPotentialId(BigInteger.valueOf(counselHistory.getPotentialId()));
-        }
-        return response;
-    }
+
 }

@@ -41,14 +41,19 @@ public class CounselCommandController {
 
     @PostMapping("/{customerId}/general")  // 기존 고객의 통합 상담
     public ResponseEntity<GeneralCounselResponse> registGeneralCounsel(@RequestBody GeneralCounsel request,
-                                                                       @PathVariable BigInteger customerId) {
+                                                                       @PathVariable BigInteger customerId,
+                                                                       @RequestParam("customerType") String customerType) {
         return counselFacadeService.registGeneralCounsel(request);
     }
 
-    @PostMapping("/potentialStage")
-    public ResponseEntity<SaveStageDataResponse> saveStageData(StageData request) {
-        return PotentialStageService.saveStageData(request);
-    }
+    // 가입 상담 단계별 저장 -> 프론트 구현 후 작성
+//    @PostMapping("/potentialStage/{stage}/{customerId}")
+//    public ResponseEntity<SaveStageDataResponse> saveStageData(@RequestBody StageData request,
+//                                                               @PathVariable int stage,
+//                                                               @PathVariable BigInteger customerId,
+//                                                               @RequestParam String customerType) {
+//        return counselFacadeService.saveStageData(request, stage, customerId, customerType);
+//    }
 
 
 

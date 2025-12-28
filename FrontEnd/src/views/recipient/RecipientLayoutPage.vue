@@ -7,11 +7,7 @@
         <p class="page-desc">수급자 정보 및 서비스 이용 내역 관리</p>
       </div>
 
-      <button class="add-button" type="button" @click="showRegist = true">
-        <!-- 아이콘 이미지가 있으면 여기에 넣으면 됨 -->
-        <!-- <img src="@/assets/img/recipient/addRecipient.png" alt="수급자 등록" /> -->
-        + 수급자 등록
-      </button>
+      <!--  여기 있던 "수급자 등록" 버튼 제거 -->
     </div>
 
     <!-- 탭 박스 -->
@@ -33,27 +29,14 @@
       </div>
     </div>
 
-    <!-- 수급자 등록 모달 -->
-    <RecipientRegist
-      :visible="showRegist"
-      @close="showRegist = false"
-      @submit="handleRegist"
-    />
+    <!--  여기 있던 RecipientRegist(기존명 : 수급자 등록) 모달 제거 -->
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
 import { useRoute } from 'vue-router'
-import RecipientRegist from '@/components/recipient/main/RecipientRegist.vue'
 
-const showRegist = ref(false)
 const route = useRoute()
-
-const handleRegist = (formData) => {
-  console.log('등록 데이터:', formData)
-  showRegist.value = false
-}
 
 // 상단 서브 탭 정의
 const tabs = [
@@ -102,25 +85,6 @@ const isActive = (tab) => route.name === tab.routeName
   font-size: 14px;
   color: #4a5565;
   margin: 0;
-}
-
-/* 수급자 등록 버튼 (일정 추가 버튼과 톤 맞춤) */
-.add-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 18px;
-  border-radius: 10px;
-  border: none;
-  background-color: #00c950;
-  color: #fff;
-  font-size: 15px;
-  cursor: pointer;
-}
-
-.add-button img {
-  width: 20px;
-  height: 20px;
 }
 
 /* 카드형 탭 박스 */

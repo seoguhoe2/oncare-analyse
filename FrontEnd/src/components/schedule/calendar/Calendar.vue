@@ -71,6 +71,7 @@
   const props = defineProps({
     keyword: { type: String, default: '' },
     searchScope: { type: String, default: 'ALL' }, // BENEFICIARY | CAREWORKER | SERVICE | ALL
+    refreshKey: { type: Number, default: 0 }, 
   });
   
   const emit = defineEmits(['select-date']);
@@ -318,7 +319,7 @@ const calendarModeText = computed(() => (isViewMonthConfirmed.value ? '' : 'ì˜ˆì
 
   let timer = null;
   watch(
-    () => [year.value, month.value, props.keyword, props.searchScope],
+    () => [year.value, month.value, props.keyword, props.searchScope, props.refreshKey],
     () => {
       clearTimeout(timer);
       timer = setTimeout(loadRangeCounts, 250);

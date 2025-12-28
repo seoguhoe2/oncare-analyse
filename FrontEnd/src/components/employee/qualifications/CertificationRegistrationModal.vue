@@ -104,19 +104,146 @@ const handleSubmit = () => {
 </template>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.modal-box { background: white; width: 450px; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; max-height: 90vh; }
-.modal-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-.modal-header h3 { font-size: 18px; font-weight: 700; color: #111; margin: 0; }
-.close-btn { background: none; border: none; cursor: pointer; color: #9ca3af; }
-.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-.modal-footer { padding: 16px 20px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 8px; background: #fff; }
-.space-y-4 > * + * { margin-top: 16px; }
-.block-label { display: block; font-size: 14px; color: #374151; margin-bottom: 4px; font-weight: 500; }
-.text-red { color: #ef4444; }
-.input { width: 100%; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: all 0.2s; box-sizing: border-box; background-color: white; }
-.input:focus { border-color: #22c55e; box-shadow: 0 0 0 3px rgba(220, 252, 231, 0.5); }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.btn-cancel { padding: 8px 16px; background-color: #f3f4f6; color: #374151; border-radius: 8px; border: none; cursor: pointer; }
-.btn-submit { padding: 8px 16px; background: linear-gradient(to right, #22c55e, #10b981); color: white; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4); /* Slightly lighter overlay */
+  backdrop-filter: blur(4px); /* Adds a modern blur effect */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  transition: opacity 0.3s ease;
+}
+.modal-box {
+  background: white;
+  width: 550px; /* Increased size */
+  border-radius: 24px; /* Softer corners */
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Richer shadow */
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  animation: modal-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes modal-pop {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.modal-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  font-size: 20px; /* Larger title */
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  border-radius: 50%;
+  padding: 8px;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+.modal-body {
+  padding: 32px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-footer {
+  padding: 24px 32px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px; /* Increased gap */
+  background: #f9fafb; /* Slight background distinction */
+}
+.space-y-4 > * + * {
+  margin-top: 24px; /* Increased vertical spacing */
+}
+.block-label {
+  display: block;
+  font-size: 15px; /* Larger label */
+  color: #374151;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.text-red {
+  color: #ef4444;
+  margin-left: 2px;
+}
+.input {
+  width: 100%;
+  padding: 12px 16px; /* Larger touch area */
+  border: 1px solid #e5e7eb;
+  border-radius: 12px; /* Softer input corners */
+  font-size: 15px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  background-color: #f9fafb; /* Light background for inputs mostly seen in modern forms */
+}
+.input:focus {
+  background-color: white;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1); /* Softer focus ring */
+}
+.input::placeholder {
+  color: #9ca3af;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px; /* Increased gap */
+}
+.btn-cancel {
+  padding: 12px 24px;
+  background-color: white;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-cancel:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+.btn-submit {
+  padding: 12px 24px;
+  background: #22c55e; /* Solid green usually looks cleaner than gradient in modern flat design, but keeping gradient if requested, user said "soft". Gradient can be soft. Let's stick to user provided image. The image has a green gradient button. */
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.2);
+  transition: all 0.2s;
+}
+.btn-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(34, 197, 94, 0.3);
+}
+.btn-submit:active {
+  transform: translateY(0);
+}
 </style>

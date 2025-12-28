@@ -10,10 +10,22 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'edit', 'delete']);
 
 const onClose = () => {
   emit('close');
+};
+
+// 수정 버튼
+const handleEdit = () => {
+  emit('edit', props.schedule);
+};
+
+// 삭제 버튼
+const handleDelete = () => {
+  if (confirm('정말 삭제하시겠습니까?')) {
+    emit('delete', props.schedule);
+  }
 };
 
 // 전화하기
@@ -46,7 +58,7 @@ const handleNavigation = () => {
       <!-- 헤더 -->
       <div class="detail-header">
         <div class="header-left">
-          <h3 class="detail-title">일정 상세</h3>
+          <h3 class="detail-title">{{ schedule.scheduleType === 'PERSONAL' ? '개인 일정' : '일정 상세' }}</h3>
         </div>
         <div class="header-right">
           <span class="status-badge">예정</span>
@@ -55,7 +67,60 @@ const handleNavigation = () => {
         </div>
       </div>
 
-      <div class="detail-body">
+      <!-- 개인 일정 본문 -->
+      <div v-if="schedule.scheduleType === 'PERSONAL'" class="detail-body">
+        <!-- 일정 정보 카드 -->
+        <div class="person-card">
+          <div class="person-avatar">
+            <div class="avatar-circle personal-icon">📅</div>
+          </div>
+          <div class="person-info">
+            <div class="person-name">{{ schedule.title || schedule.recipient }}</div>
+            <div class="person-detail">{{ schedule.serviceLabel || schedule.type }}</div>
+            <div class="person-time">
+              <span class="time-icon">🕐</span>
+              {{ schedule.startTime }}-{{ schedule.endTime }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 장소 -->
+        <div class="section" v-if="schedule.location || schedule.address">
+          <div class="section-header">
+            <span class="section-icon">📍</span>
+            <span class="section-title">장소/주소</span>
+          </div>
+          <div class="section-content">
+            <p class="address-text">{{ schedule.location || schedule.address }}</p>
+          </div>
+        </div>
+
+        <!-- 메모 -->
+        <div class="section" v-if="schedule.notes">
+          <div class="section-header">
+            <span class="section-icon">📝</span>
+            <span class="section-title">특이사항</span>
+          </div>
+          <div class="section-content special-content">
+            <p class="special-text">{{ schedule.notes }}</p>
+          </div>
+        </div>
+
+        <!-- 수정/삭제 버튼 -->
+        <div class="action-buttons-bottom">
+          <button class="action-btn edit-btn" type="button" @click="handleEdit">
+            <span class="btn-icon">✏️</span>
+            수정
+          </button>
+          <button class="action-btn delete-btn" type="button" @click="handleDelete">
+            <span class="btn-icon">🗑️</span>
+            삭제
+          </button>
+        </div>
+      </div>
+
+      <!-- 방문 일정 본문 -->
+      <div v-else class="detail-body">
         <!-- 담당자 정보 -->
         <div class="person-card">
           <div class="person-avatar">
@@ -95,50 +160,57 @@ const handleNavigation = () => {
         </div>
 
         <!-- 서비스 내용 -->
-        <div class="section">
+        <div class="section" v-if="schedule.serviceContent">
           <div class="section-header">
             <span class="section-icon">📋</span>
             <span class="section-title">서비스 내용</span>
           </div>
           <div class="section-content service-content">
-            <div class="service-item">가사 보조, 세면 보조, 식사 보조, 목욕 관리, 혈압 체크</div>
+            <div class="service-item">{{ schedule.serviceContent }}</div>
           </div>
         </div>
 
         <!-- 질환 -->
-        <div class="section">
+        <div class="section" v-if="schedule.disease && schedule.disease.length > 0">
           <div class="section-header">
             <span class="section-icon">❤️</span>
             <span class="section-title">질환</span>
           </div>
           <div class="section-content tag-content">
-            <span class="tag tag-red">치매</span>
-            <span class="tag tag-red">고혈압</span>
-            <span class="tag tag-red">당뇨</span>
+            <span class="tag tag-red" v-for="(item, index) in schedule.disease" :key="index">{{ item }}</span>
           </div>
         </div>
 
         <!-- 위험요소 -->
-        <div class="section">
+        <div class="section" v-if="schedule.riskFactors && schedule.riskFactors.length > 0">
           <div class="section-header warning-header">
             <span class="section-icon">⚠️</span>
             <span class="section-title">위험요소</span>
           </div>
           <div class="section-content tag-content">
-            <span class="tag tag-warning">낙상 위험</span>
-            <span class="tag tag-warning">배회 위험</span>
-            <span class="tag tag-warning">혈압 관리 필요</span>
+            <span class="tag tag-warning" v-for="(item, index) in schedule.riskFactors" :key="index">{{ item }}</span>
           </div>
         </div>
 
         <!-- 특이사항 -->
-        <div class="section">
+        <div class="section" v-if="schedule.significants && schedule.significants.length > 0">
           <div class="section-header special-header">
             <span class="section-icon">⚡</span>
             <span class="section-title">특이사항</span>
           </div>
           <div class="section-content special-content">
-            <p class="special-text">치매 초기 증상, 낙상 위험 주의</p>
+            <p class="special-text" v-for="(item, index) in schedule.significants" :key="index">{{ item }}</p>
+          </div>
+        </div>
+
+        <!-- 메모 -->
+        <div class="section" v-if="schedule.notes">
+          <div class="section-header">
+            <span class="section-icon">📝</span>
+            <span class="section-title">메모</span>
+          </div>
+          <div class="section-content special-content">
+            <p class="special-text">{{ schedule.notes }}</p>
           </div>
         </div>
 
@@ -150,6 +222,18 @@ const handleNavigation = () => {
           <div class="section-content">
             <p class="emergency-contact">{{ schedule.emergencyContact || '010-9999-1111 (아들 김민준)' }}</p>
           </div>
+        </div>
+
+        <!-- 수정/삭제 버튼 -->
+        <div class="action-buttons-bottom">
+          <button class="action-btn edit-btn" type="button" @click="handleEdit">
+            <span class="btn-icon">✏️</span>
+            수정
+          </button>
+          <button class="action-btn delete-btn" type="button" @click="handleDelete">
+            <span class="btn-icon">🗑️</span>
+            삭제
+          </button>
         </div>
       </div>
     </div>
@@ -300,6 +384,10 @@ const handleNavigation = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.person-avatar .avatar-circle.personal-icon {
+  background: #a78bfa;
 }
 
 .person-info {
@@ -502,6 +590,37 @@ const handleNavigation = () => {
   font-size: 14px;
   color: #475569;
   font-weight: 500;
+}
+
+/* 하단 액션 버튼 */
+.action-buttons-bottom {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.edit-btn {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.edit-btn:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.delete-btn {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.delete-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
 }
 
 /* 스크롤바 스타일 */

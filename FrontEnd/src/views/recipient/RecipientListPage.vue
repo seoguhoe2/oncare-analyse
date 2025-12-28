@@ -1,29 +1,33 @@
+<!-- src/views/RecipientListPage.vue -->
 <template>
   <div class="page-body">
     <!-- 왼쪽: 수급자 목록 -->
     <section class="left-panel">
+      <!-- ref 반드시 필요 -->
       <RecipientList
-        :recipients="recipients"
+        ref="listRef"
         v-model:selected-id="selectedId"
       />
     </section>
 
-    <!-- 오른쪽: 안내 또는 상세 정보 -->
+    <!-- 오른쪽 -->
     <section class="right-panel">
-      <!-- ❌ 아직 선택 안 됐을 때: 안내 카드 -->
-      <div v-if="!selectedRecipient" class="placeholder-card">
+      <div v-if="!selectedId" class="placeholder-card">
         <div class="placeholder-icon">👤</div>
         <p class="placeholder-text">좌측 목록에서 수급자를 선택해주세요</p>
       </div>
 
-      <!-- ✅ 선택된 수급자가 있을 때: 정보 + 탭 -->
       <template v-else>
-        <RecipientInformation :recipient="selectedRecipient" />
+        <!-- updated(수급자 정보 수정) 이벤트 받기 -->
+        <RecipientInformation
+          :beneficiary-id="selectedId"
+          @updated="handleUpdated"
+        />
 
         <RecipientCategory
-          :recipient="selectedRecipient"
-          :service-history="filteredServiceHistory"
-          :rental-items="filteredRentalItems"
+          :beneficiary-id="selectedId"
+          :refresh-key="refreshKey"
+          :monthly-summary-list="monthlySummaryCards"
         />
       </template>
     </section>
@@ -31,49 +35,76 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, watch } from 'vue'
+import api from '@/lib/api'
 
 import RecipientList from '@/components/recipient/main/RecipientList.vue'
 import RecipientInformation from '@/components/recipient/main/RecipientInformation.vue'
 import RecipientCategory from '@/components/recipient/main/RecipientCategory.vue'
 
-import { recipientsMock } from '@/mock/recipient/recipientMock'
-import { serviceHistoryMock } from '@/mock/recipient/serviceHistoryMock'
-import { rentalItemsMock } from '@/mock/recipient/rentalItemsMock'
-
-const recipients = ref(recipientsMock)
-const serviceHistory = ref(serviceHistoryMock)
-const rentalItems = ref(rentalItemsMock)
-
-// ✅ 처음에는 아무도 선택 안 함
 const selectedId = ref(null)
+const listRef = ref(null) // 모든 탭에게 "수급자 변경됨" 신호
+const refreshKey = ref(0)  // 모든 탭들이 수급자 정보가 수정되면 새로고침 없이 자동으로 수정
 
-const selectedRecipient = computed(
-  () => recipients.value.find((r) => r.id === selectedId.value) || null
+/** ✅ 월 카드(요양일지 있는 월만) */
+const monthlySummaryCards = ref([])
+
+/** ✅ 카드 기본 문구(요약 전) */
+const DEFAULT_MONTH_TEXT = '해당 월의 경향을 한눈에 보려면 AI요약 버튼을 클릭하세요!'
+
+const handleUpdated = async () => {
+  // 좌측 목록(수급자 전체조회) 즉시 갱신
+  listRef.value?.refresh()
+
+  // 모든 탭에게 "수급자 변경됨" 신호
+  refreshKey.value++
+
+  // (선택) 수급자 정보 수정이 요양일지에는 영향 없을 가능성이 높지만,
+  // 혹시 몰라 월카드도 새로 생성
+  await fetchMonthlyCards()
+}
+
+/**
+ * ✅ 수급자 선택되면:
+ * 1) 요양일지 전체 조회(월 파라미터 없이)
+ * 2) serviceDate로 월(YYYY-MM) 뽑아서 월카드 생성
+ */
+const fetchMonthlyCards = async () => {
+  if (!selectedId.value) {
+    monthlySummaryCards.value = []
+    return
+  }
+
+  try {
+    const { data } = await api.get(`/api/beneficiaries/${selectedId.value}/care-logs`)
+    const list = Array.isArray(data) ? data : []
+
+    const monthsSet = new Set()
+    for (const row of list) {
+      const sd = String(row?.serviceDate || '')
+      if (sd.length >= 7) monthsSet.add(sd.slice(0, 7)) // 'YYYY-MM'
+    }
+
+    // 최신 월이 위로 오도록 내림차순
+    const months = Array.from(monthsSet).sort((a, b) => (a < b ? 1 : -1))
+
+    monthlySummaryCards.value = months.map((m) => ({
+      month: m,
+      text: DEFAULT_MONTH_TEXT
+    }))
+  } catch (e) {
+    console.error('[fetchMonthlyCards] failed:', e)
+    monthlySummaryCards.value = []
+  }
+}
+
+/** ✅ 수급자 바뀔 때마다 월카드 생성 */
+watch(
+  () => selectedId.value,
+  async () => {
+    await fetchMonthlyCards()
+  }
 )
-
-/**
- * 🔥 선택한 수급자 기준으로 서비스 이력 필터링
- *  - serviceHistoryMock 안에 들어있는 "수급자 식별자" 필드명에 맞춰서
- *    recipientId 부분만 바꿔주면 됨.
- */
-const filteredServiceHistory = computed(() => {
-  if (!selectedId.value) return []
-  return serviceHistory.value.filter(
-    (h) => h.recipientId === selectedId.value // 👈 필드명 맞게 변경
-  )
-})
-
-/**
- * 🔥 선택한 수급자 기준으로 렌탈 이력 필터링
- *  - 마찬가지로 rentalItemsMock 에 있는 수급자 FK 필드명으로 수정
- */
-const filteredRentalItems = computed(() => {
-  if (!selectedId.value) return []
-  return rentalItems.value.filter(
-    (r) => r.recipientId === selectedId.value // 👈 필드명 맞게 변경
-  )
-})
 </script>
 
 <style scoped>
@@ -83,18 +114,13 @@ const filteredRentalItems = computed(() => {
   gap: 16px;
   margin-top: 12px;
 }
-
 .left-panel,
 .right-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
-/* 오른쪽 안내 카드 */
 .placeholder-card {
-  width: 100%;
-  height: 100%;
   min-height: 260px;
   border-radius: 16px;
   border: 1px solid #e5e7eb;
@@ -104,19 +130,16 @@ const filteredRentalItems = computed(() => {
   align-items: center;
   justify-content: center;
 }
-
 .placeholder-icon {
   font-size: 40px;
   margin-bottom: 10px;
   color: #9ca3af;
 }
-
 .placeholder-text {
   margin: 0;
   font-size: 14px;
   color: #6b7280;
 }
-
 @media (max-width: 960px) {
   .page-body {
     grid-template-columns: 1fr;

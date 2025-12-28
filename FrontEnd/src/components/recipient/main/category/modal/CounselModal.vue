@@ -8,10 +8,10 @@
           <button type="button" class="close-btn" @click="close">✕</button>
         </div>
 
-        <!-- ✅ 상담 카테고리 배지 -->
-        <div class="category-row">
+        <!-- 카테고리 배지: 값 있을 때만 -->
+        <div class="category-row" v-if="detail?.counselingType">
           <span class="category-pill">
-            {{ counselType }}
+            {{ detail.counselingType }}
           </span>
         </div>
 
@@ -19,52 +19,64 @@
         <div class="info-grid">
           <div class="info-item">
             <div class="label">상담 날짜</div>
-            <div class="value">{{ counsel?.date || '-' }}</div>
+            <div class="value">{{ detail?.counselingDate || '-' }}</div>
           </div>
-          <div class="info-item">
+
+          <div class="info-item" v-if="detail?.attendees">
             <div class="label">참석 가족</div>
-            <div class="value">{{ counsel?.family || '-' }}</div>
+            <div class="value">{{ detail.attendees }}</div>
           </div>
-          <div class="info-item">
+
+          <div class="info-item" v-if="detail?.careWorkerName">
             <div class="label">요양보호사</div>
-            <div class="value">{{ counsel?.careWorker || '-' }}</div>
+            <div class="value">{{ detail.careWorkerName }}</div>
           </div>
-          <div class="info-item">
+
+          <div class="info-item" v-if="detail?.beneficiaryName">
             <div class="label">수급자</div>
-            <div class="value">{{ counsel?.beneficiary || '-' }}</div>
+            <div class="value">{{ detail.beneficiaryName }}</div>
           </div>
         </div>
       </header>
 
       <!-- 본문 -->
-      <section class="modal-body" v-if="counsel">
-        <div class="section-block">
-          <div class="section-title">방문 목적</div>
-          <div class="textarea-box">
-            {{ counsel.purpose || '예: 서비스 만족도 확인 및 추가 요구사항 파악' }}
-          </div>
-        </div>
+      <section class="modal-body">
+        <div v-if="loading" class="loading-text">상세 정보를 불러오는 중...</div>
 
-        <div class="section-block">
-          <div class="section-title">주요 논의사항</div>
-          <div class="textarea-box">
-            {{ counsel.mainDiscussion || '상담 중 논의된 주요 사항을 입력하세요' }}
+        <template v-else>
+          <div v-if="errorMsg" class="error-box">
+            {{ errorMsg }}
           </div>
-        </div>
 
-        <div class="section-block">
-          <div class="section-title">합의 사항</div>
-          <div class="textarea-box">
-            {{ counsel.agreement || '합의된 사항, 향후 계획 등을 입력하세요' }}
+          <!-- visitPurpose: 값 있을 때만 -->
+          <div class="section-block" v-if="detail?.visitPurpose">
+            <div class="section-title">방문 목적</div>
+            <div class="textarea-box">{{ detail.visitPurpose }}</div>
           </div>
-        </div>
 
-        <div class="section-block">
-          <div class="section-title">다음 방문 예정일</div>
-          <div class="textarea-box">
-            {{ counsel.nextVisit || '연도-월-일' }}
+          <!-- discussionContent: 값 있을 때만 -->
+          <div class="section-block" v-if="detail?.discussionContent">
+            <div class="section-title">주요 논의사항</div>
+            <div class="textarea-box">{{ detail.discussionContent }}</div>
           </div>
-        </div>
+
+          <!-- agreementContent: 값 있을 때만 -->
+          <div class="section-block" v-if="detail?.agreementContent">
+            <div class="section-title">합의 사항</div>
+            <div class="textarea-box">{{ detail.agreementContent }}</div>
+          </div>
+
+          <!-- nextVisitDate: 값 있을 때만 -->
+          <div class="section-block" v-if="detail?.nextVisitDate">
+            <div class="section-title">다음 방문 예정일</div>
+            <div class="textarea-box">{{ detail.nextVisitDate }}</div>
+          </div>
+
+          <!-- 아무 내용도 없을 때 -->
+          <div v-if="!hasAnyDetail && !errorMsg" class="empty-detail">
+            표시할 상세 내용이 없습니다.
+          </div>
+        </template>
       </section>
 
       <!-- 푸터 -->
@@ -78,27 +90,63 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import api from '@/lib/api'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  counsel: {
-    type: Object,
-    default: null
-  }
+  modelValue: { type: Boolean, default: false },
+
+  // ✅ 모달이 직접 상세조회에 필요한 값만 받음
+  beneficiaryId: { type: [Number, String], required: true },
+  counselingId: { type: [Number, String], default: null }
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const detail = ref(null)
+const loading = ref(false)
+const errorMsg = ref('')
 
 const close = () => {
   emit('update:modelValue', false)
 }
 
-// 보호자상담 / 면담 / 초기상담 등
-const counselType = computed(() => props.counsel?.type || '보호자상담')
+// ✅ 상세 조회
+const fetchDetail = async () => {
+  if (!props.modelValue) return
+  if (!props.beneficiaryId || !props.counselingId) return
+
+  loading.value = true
+  errorMsg.value = ''
+  detail.value = null
+
+  try {
+    const { data } = await api.get(
+      `/api/beneficiaries/${props.beneficiaryId}/counselings/${props.counselingId}`
+    )
+    detail.value = data
+  } catch (e) {
+    console.error('상담 상세 조회 실패:', e)
+    errorMsg.value = '상담 상세 정보를 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// ✅ 모달이 열릴 때 / counselingId가 바뀔 때 자동 조회
+watch(
+  () => [props.modelValue, props.counselingId, props.beneficiaryId],
+  ([open]) => {
+    if (open) fetchDetail()
+  },
+  { immediate: true }
+)
+
+const hasAnyDetail = computed(() => {
+  const c = detail.value
+  if (!c) return false
+  return !!(c.visitPurpose || c.discussionContent || c.agreementContent || c.nextVisitDate)
+})
 </script>
 
 <style scoped>
@@ -123,7 +171,7 @@ const counselType = computed(() => props.counsel?.type || '보호자상담')
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
 }
 
-/* 헤더 영역 */
+/* 헤더 */
 .modal-header {
   padding: 16px 20px 18px;
   background: #ffffff;
@@ -149,7 +197,7 @@ const counselType = computed(() => props.counsel?.type || '보호자상담')
   color: #6b7280;
 }
 
-/* ✅ 카테고리 배지 */
+/* 카테고리 배지 */
 .category-row {
   margin-bottom: 10px;
 }
@@ -161,11 +209,11 @@ const counselType = computed(() => props.counsel?.type || '보호자상담')
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  background: #d1fae5; /* 연한 초록 */
-  color: #15803d;      /* 진한 초록 */
+  background: #d1fae5;
+  color: #15803d;
 }
 
-/* 기본 정보 영역 */
+/* 기본 정보 */
 .info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -209,6 +257,29 @@ const counselType = computed(() => props.counsel?.type || '보호자상담')
   background: #ffffff;
   color: #374151;
   white-space: pre-wrap;
+}
+
+.loading-text {
+  font-size: 12px;
+  color: #6b7280;
+  padding: 10px 2px;
+}
+
+.empty-detail {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.error-box {
+  padding: 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
 }
 
 /* 푸터 */

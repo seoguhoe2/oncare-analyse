@@ -1,25 +1,26 @@
 <template>
   <section class="matching-panel">
-    <!-- 제목 + 인원수 -->
     <header class="panel-header">
       <h2 class="panel-title">요양보호사</h2>
       <span class="count-badge">{{ caregivers.length }}명</span>
     </header>
 
-    <!-- 검색 -->
     <div class="search-bar">
       <img :src="searchIcon" class="search-icon" />
       <input v-model="search" type="text" placeholder="요양보호사 검색..." />
     </div>
 
-    <!-- 리스트 스크롤 영역 -->
-    <div class="table-scroll">
+    <div v-if="loading" class="loading">불러오는 중...</div>
+    <div v-else-if="error" class="error">{{ error }}</div>
+
+    <div v-else class="table-scroll">
       <table class="list-table">
         <tbody>
           <tr
             v-for="item in pagedList"
-            :key="item.id"
+            :key="item.careWorkerId ?? item.id"
             class="list-row"
+            :class="{ selected: selectedCareWorkerId === (item.careWorkerId ?? item.id) }"
             @click="handleSelect(item)"
           >
             <td class="name">{{ item.name }}</td>
@@ -28,24 +29,22 @@
                 {{ item.gender }}
               </span>
             </td>
-            <td class="dash">–</td>
             <td>
               <div class="tags">
-                <span
-                  v-for="tag in item.services"
-                  :key="tag"
-                  class="tag"
-                >
+                <span v-for="tag in item.tags" :key="tag" class="tag">
                   {{ tag }}
                 </span>
               </div>
             </td>
           </tr>
+
+          <tr v-if="!pagedList.length">
+            <td colspan="3" class="dash">표시할 요양보호사가 없습니다.</td>
+          </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 페이지네이션 -->
     <div class="pagination">
       <button @click="prevPage" :disabled="page === 1">〈</button>
       <span>{{ page }} / {{ totalPages }}</span>
@@ -55,29 +54,114 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import searchIcon from '@/assets/img/common/search.png'
-import { caregiverMockData } from '@/mock/schedule/matchingCaregiverMock.js'
+import {
+  getCandidateCareWorkerCards,
+  getCreateVisitAvailableCareWorkerCards,
+} from '@/api/schedule/matching.js'
 
-// ✅ 상위(MatchingPage)로 선택된 요양보호사 전달
+const props = defineProps({
+  recipient: { type: Object, default: null },
+  startDt: { type: String, default: '' },
+  endDt: { type: String, default: '' },
+  // ✅ 추가: 드롭다운에서 선택한 서비스 타입
+  serviceTypeId: { type: Number, default: null },
+})
+
 const emit = defineEmits(['select-caregiver'])
 
 const search = ref('')
 const page = ref(1)
 const pageSize = 10
 
-const caregivers = computed(() => {
-  const q = search.value.toLowerCase().trim()
-  return q
-    ? caregiverMockData.filter(c =>
-        [c.name, c.gender, ...(c.services || [])].some(f =>
-          String(f).toLowerCase().includes(q)
-        )
-      )
-    : caregiverMockData
+const loading = ref(false)
+const error = ref('')
+const caregiversRaw = ref([])
+
+const selectedCareWorkerId = ref(null)
+
+const getBeneficiaryId = (obj) => obj?.beneficiaryId ?? obj?.id ?? null
+const beneficiaryId = computed(() => getBeneficiaryId(props.recipient))
+
+// ✅ 생성모드: start/end가 있으면 생성 흐름
+const isCreateVisitMode = computed(() => Boolean(props.startDt && props.endDt))
+
+const loadCareWorkers = async () => {
+  if (!beneficiaryId.value) {
+    caregiversRaw.value = []
+    error.value = ''
+    return
+  }
+
+  // ✅ 생성모드에서는 서비스타입도 필수(드롭다운 선택 전엔 빈 목록)
+  if (isCreateVisitMode.value && (!props.startDt || !props.endDt || !props.serviceTypeId)) {
+    caregiversRaw.value = []
+    error.value = ''
+    return
+  }
+
+  try {
+    loading.value = true
+    error.value = ''
+
+    const res = isCreateVisitMode.value
+      ? await getCreateVisitAvailableCareWorkerCards({
+          beneficiaryId: beneficiaryId.value,
+          startDt: props.startDt,
+          endDt: props.endDt,
+          // ✅ 추가: 백엔드에서 이 값으로 서비스 타입 필터
+          serviceTypeId: props.serviceTypeId,
+        })
+      : await getCandidateCareWorkerCards(beneficiaryId.value)
+
+    const list = Array.isArray(res?.data) ? res.data : []
+
+    caregiversRaw.value = list.map((c) => ({
+      careWorkerId: c?.careWorkerId ?? c?.id ?? null,
+      name: c?.name ?? '-',
+      gender: c?.gender ?? '-',
+      tags: Array.isArray(c?.tags) ? c.tags : [],
+    }))
+  } catch (e) {
+    caregiversRaw.value = []
+    error.value =
+      e?.response?.data?.message || '요양보호사 목록을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+// ✅ serviceTypeId 변경에도 다시 로드
+watch(
+  () => [beneficiaryId.value, props.startDt, props.endDt, props.serviceTypeId, isCreateVisitMode.value],
+  () => {
+    page.value = 1
+    search.value = ''
+    selectedCareWorkerId.value = null
+    loadCareWorkers()
+  },
+  { immediate: true }
+)
+
+watch(search, () => {
+  page.value = 1
 })
 
-const totalPages = computed(() => Math.ceil(caregivers.value.length / pageSize))
+const caregivers = computed(() => {
+  const q = search.value.toLowerCase().trim()
+  if (!q) return caregiversRaw.value
+
+  return caregiversRaw.value.filter((c) =>
+    [c.name, c.gender, ...(c.tags || [])].some((f) =>
+      String(f ?? '').toLowerCase().includes(q)
+    )
+  )
+})
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(caregivers.value.length / pageSize))
+)
 
 const pagedList = computed(() =>
   caregivers.value.slice((page.value - 1) * pageSize, page.value * pageSize)
@@ -90,12 +174,13 @@ const nextPage = () => {
   if (page.value < totalPages.value) page.value++
 }
 
-// ✅ 행 클릭 시 emit
-const handleSelect = item => {
-  emit('select-caregiver', item)
+const handleSelect = (item) => {
+  const careWorkerId = item?.careWorkerId ?? item?.id ?? null
+  selectedCareWorkerId.value = careWorkerId
+  emit('select-caregiver', { ...item, careWorkerId })
 }
 
-const badgeClass = gender => ({
+const badgeClass = (gender) => ({
   badge: true,
   male: gender === '남자',
   female: gender === '여자',
@@ -103,6 +188,7 @@ const badgeClass = gender => ({
 </script>
 
 <style scoped>
+/* ✅ 스타일은 그대로 사용하셔도 됩니다 */
 .matching-panel {
   background: #ffffff;
   border-radius: 16px;
@@ -114,7 +200,6 @@ const badgeClass = gender => ({
   height: 480px;
 }
 
-/* 제목 */
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -136,7 +221,6 @@ const badgeClass = gender => ({
   color: #9333ea;
 }
 
-/* 검색바 */
 .search-bar {
   display: flex;
   align-items: center;
@@ -162,7 +246,6 @@ const badgeClass = gender => ({
   outline: none;
 }
 
-/* 리스트 스크롤 영역 */
 .table-scroll {
   flex: 1;
   overflow-y: auto;
@@ -178,19 +261,28 @@ const badgeClass = gender => ({
   border-radius: 8px;
 }
 
-/* 테이블 */
 .list-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-/* 행 */
 .list-row {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 .list-row:hover {
   background: #f9fafb;
+}
+
+.list-row.selected {
+  background: #ecfdf5;
+}
+.list-row.selected:hover {
+  background: #d1fae5;
+}
+.list-row.selected td {
+  font-weight: 600;
+  color: #065f46;
 }
 
 .list-table td {
@@ -207,7 +299,6 @@ const badgeClass = gender => ({
   color: #9ca3af;
 }
 
-/* 성별 뱃지 */
 .badge {
   padding: 3px 8px;
   border-radius: 999px;
@@ -225,7 +316,6 @@ const badgeClass = gender => ({
   color: #ec4899;
 }
 
-/* 태그 */
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -240,7 +330,6 @@ const badgeClass = gender => ({
   font-size: 12px;
 }
 
-/* 페이지네이션 */
 .pagination {
   display: flex;
   justify-content: center;

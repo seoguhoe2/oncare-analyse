@@ -1,5 +1,5 @@
 <template>
-  <div class="memo-wrap">
+  <div class="memo-wrap" :class="{ 'is-saved': savedHint, 'is-error': saveError }">
     <div class="memo-head">
       <div class="memo-left">
         <img :src="memoIcon" class="memo-icon" alt="memo" />
@@ -23,11 +23,15 @@
         :placeholder="placeholder"
         v-model="text"
         :disabled="loading"
+        @focus="clearSavedHint"
+        @click="clearSavedHint"
       ></textarea>
 
       <div class="memo-hint">
         <span v-if="loading">불러오는 중…</span>
         <span v-else-if="saving">저장 중…</span>
+        <span v-else-if="savedHint" class="hint-ok">저장 완료 ✓</span>
+        <span v-else-if="saveError" class="hint-bad">저장 실패…</span>
       </div>
     </div>
   </div>
@@ -43,9 +47,9 @@ import { getConfirmedMemo, upsertConfirmedMemo } from '@/api/schedule/confirmedM
 
 const props = defineProps({
   source: { type: String, default: 'NORMAL' }, // 'CONFIRMED' | 'NORMAL'
-  matchingId: { type: [Number, String], default: null }, // NORMAL에서 사용
-  vsId: { type: [Number, String], default: null },       // CONFIRMED에서 사용
-  memoDate: { type: String, default: '' },               // NORMAL에서 사용
+  matchingId: { type: [Number, String], default: null },
+  vsId: { type: [Number, String], default: null },
+  memoDate: { type: String, default: '' },
   placeholder: { type: String, default: '특이사항이나 전달사항을 입력하세요' },
   modelValue: { type: String, default: '' },
 });
@@ -56,9 +60,11 @@ const text = ref(props.modelValue || '');
 const loading = ref(false);
 const saving = ref(false);
 
-const isConfirmed = computed(() => String(props.source || '').toUpperCase() === 'CONFIRMED');
+const savedHint = ref(false);
+const saveError = ref(false);
 
-const titleText = computed(() => (isConfirmed.value ? '컨펌메모' : '일정 메모'));
+const isConfirmed = computed(() => String(props.source || '').toUpperCase() === 'CONFIRMED');
+const titleText = computed(() => (isConfirmed.value ? '특이사항 메모' : '일정 메모'));
 
 watch(
   () => props.modelValue,
@@ -77,7 +83,20 @@ const canSave = computed(() => {
   return props.matchingId != null && !!props.memoDate;
 });
 
+const clearSavedHint = () => {
+  // ✅ 메모창을 다시 누르면 “저장 완료” 숨김
+  savedHint.value = false;
+};
+
+const resetFeedback = () => {
+  saveError.value = false;
+  savedHint.value = false;
+};
+
 const loadMemo = async () => {
+  // ✅ 다른 일정(식별자 변경)로 이동하면 표시 초기화
+  resetFeedback();
+
   if (!canSave.value) {
     text.value = props.modelValue || '';
     return;
@@ -108,7 +127,9 @@ const loadMemo = async () => {
 const onAccept = async () => {
   if (!canSave.value) return;
 
+  saveError.value = false;
   saving.value = true;
+
   try {
     if (isConfirmed.value) {
       await upsertConfirmedMemo({
@@ -116,6 +137,7 @@ const onAccept = async () => {
         note: text.value,
       });
       emit('saved', { content: text.value });
+      savedHint.value = true; // ✅ 저장 완료 유지
       return;
     }
 
@@ -125,6 +147,10 @@ const onAccept = async () => {
       content: text.value,
     });
     emit('saved', { content: text.value });
+    savedHint.value = true; // ✅ 저장 완료 유지
+  } catch (e) {
+    saveError.value = true;
+    savedHint.value = false;
   } finally {
     saving.value = false;
   }
@@ -220,5 +246,25 @@ watch(
   margin-top: 10px;
   font-size: 12px;
   color: #6b7280;
+}
+
+/* 실패만 강조 */
+.memo-wrap.is-error .memo-box {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16);
+}
+
+.hint-ok {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.hint-bad {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.memo-wrap.is-saved .memo-box {
+  border-color: #22c55e;
 }
 </style>

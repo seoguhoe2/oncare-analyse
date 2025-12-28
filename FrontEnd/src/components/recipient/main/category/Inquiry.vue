@@ -1,84 +1,100 @@
-<!-- src/components/recipient/category/Inquiry.vue -->
+<!-- src/components/recipient/main/category/Inquiry.vue -->
 <template>
   <div class="list-column">
+    <!-- 로딩/빈상태 -->
+    <div v-if="loading" class="empty">불러오는 중...</div>
+    <div v-else-if="!inquiryList.length" class="empty">문의 이력이 없습니다.</div>
+
+    <!-- 목록 -->
     <div
+      v-else
       v-for="item in inquiryList"
-      :key="item.id"
+      :key="item.counselHistoryId"
       class="list-card compact"
-      @click="openModal(item)"
+      @click="openModal(item.counselHistoryId)"
     >
       <div class="list-header-row">
-        <span class="badge-type" :class="item.typeClass">
-          {{ item.type }}
+        <!-- ✅ 전화문의 등: categoryName -->
+        <span class="badge-type type-phone">
+          {{ item.categoryName }}
         </span>
-        <span class="list-date">{{ item.date }} · {{ item.time }}</span>
+
+        <!-- ✅ 날짜만 표시(시간 제거): consultDate -->
+        <span class="list-date">{{ item.consultDate }}</span>
       </div>
-      <p class="list-text">
-        {{ item.text }}
+
+      <!-- ✅ 내용: detail -->
+      <p v-if="item.detail" class="list-text">
+        {{ item.detail }}
       </p>
     </div>
 
-    <!-- ✅ 문의 이력 모달 -->
+    <!-- ✅ 문의 이력 모달: id만 넘김 -->
     <InquiryModal
       v-model="showModal"
-      :inquiry="selectedInquiry"
+      :beneficiary-id="beneficiaryId"
+      :counsel-history-id="selectedCounselHistoryId"
     />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import api from '@/lib/api'
 import InquiryModal from './modal/InquiryModal.vue'
 
+const props = defineProps({
+  beneficiaryId: {
+    type: [Number, String],
+    required: true
+  },
+  refreshKey: Number
+})
+
+const loading = ref(false)
+const inquiryList = ref([])
+
 const showModal = ref(false)
-const selectedInquiry = ref(null)
+const selectedCounselHistoryId = ref(null)
 
-const inquiryList = ref([
-  {
-    id: 1,
-    recipient:1,
-    type: '전화문의',
-    typeClass: 'type-phone',
-    typeLabel: '정기상담',
-    date: '2024-12-01',
-    time: '30분',
-    counselor: '김상담사',
-    beneficiary: '김영희',
-    text: '최근 건강상태 및 서비스 만족도 조사. 혈압 관리 상태 양호하며, 요양보호사와의 관계도 원만함.',
-    followUp: '혈압약 복용 시간 준수 독려'
-  },
-  {
-    id: 2,
-    recipient:2,
-    type: '가정방문',
-    typeClass: 'type-home',
-    typeLabel: '추가문의',
-    date: '2024-11-15',
-    time: '45분',
-    counselor: '박상담사',
-    beneficiary: '이순자',
-    text: '보호자와 함께 향후 서비스 이용 계획 점검 및 낙상 예방 교육을 진행함.',
-    followUp: '욕실 미끄럼 방지 매트 설치 권장 및 야간 조명 보강 안내'
-  },
-  {
-    id: 3,
-    recipient:3,
-    type: '문자문의',
-    typeClass: 'type-sms',
-    typeLabel: '사전문의',
-    date: '2024-10-20',
-    time: '40분',
-    counselor: '최상담사',
-    beneficiary: '박영수',
-    text: '서비스 시작 전 기본 주의사항 안내 및 서비스 계약 관련 문의 응대.',
-    followUp: '초기 방문 일정 확정 후 안내 문자 발송 예정'
+// ✅ 목록 조회 API만
+const fetchInquiryList = async () => {
+  if (!props.beneficiaryId) return
+  loading.value = true
+
+  try {
+    const { data } = await api.get(
+      `/api/beneficiaries/${props.beneficiaryId}/counsel-histories`
+    )
+    inquiryList.value = data?.items ?? []
+  } catch (e) {
+    console.error('문의이력 목록 조회 실패:', e)
+    inquiryList.value = []
+  } finally {
+    loading.value = false
   }
-])
+}
 
-const openModal = (item) => {
-  selectedInquiry.value = item
+const openModal = (counselHistoryId) => {
+  selectedCounselHistoryId.value = counselHistoryId
   showModal.value = true
 }
+
+onMounted(fetchInquiryList)
+watch(() => props.beneficiaryId, fetchInquiryList)
+
+// beneficiaryId 변경 시 목록 재조회 + 모달 닫기
+watch(
+  () => [props.beneficiaryId, props.refreshKey],
+  () => {
+    inquiryList.value = []
+    showModal.value = false
+    selectedCounselHistoryId.value = null
+    fetchInquiryList()
+  }
+  // },
+  // { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -87,6 +103,7 @@ const openModal = (item) => {
   flex-direction: column;
   gap: 6px;
 }
+
 .list-card {
   padding: 10px 12px;
   border-radius: 10px;
@@ -94,18 +111,22 @@ const openModal = (item) => {
   font-size: 12px;
   cursor: pointer;
 }
+
 .list-card.compact {
   background-color: #f9fafb;
 }
+
 .list-card:hover {
   background-color: #e5f2ff;
 }
+
 .list-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
 }
+
 .list-text {
   margin: 0;
   color: #4b5563;
@@ -117,20 +138,23 @@ const openModal = (item) => {
   padding: 2px 8px;
   font-size: 11px;
 }
+
+/* ✅ 색상은 기존 phone 스타일을 재사용 */
 .type-phone {
   background-color: #dcfce7;
   color: #15803d;
 }
-.type-home {
-  background-color: #fee2e2;
-  color: #b91c1c;
-}
-.type-sms {
-  background-color: #e0f2fe;
-  color: #1d4ed8;
-}
+
 .list-date {
   color: #6b7280;
   font-size: 11px;
+}
+
+.empty {
+  padding: 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
 }
 </style>

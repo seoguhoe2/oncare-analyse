@@ -1,4 +1,4 @@
-<!-- src/components/recipient/RecipientCategory.vue -->
+<!-- src/components/recipient/main/RecipientCategory.vue -->
 <template>
   <div class="card">
     <!-- 상단 탭 -->
@@ -19,82 +19,86 @@
     <div class="bottom-content">
       <!-- 일정 관리 -->
       <Calender
-        v-if="activeTab === 'schedule'"
-        :recipient="recipient"
+        v-if="activeTab === 'calender'"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
 
       <!-- 서비스 / 렌탈 -->
       <ServiceRental
         v-else-if="activeTab === 'service'"
-        :recipient="recipient"
-        :service-history="serviceHistory"
-        :rental-items="rentalItems"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
 
       <!-- 기록 관리 -->
       <Record
         v-else-if="activeTab === 'record'"
-        :recipient="recipient"
+        :monthly-summary-list="monthlySummaryList"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
 
       <!-- 상담 -->
       <Counsel
         v-else-if="activeTab === 'counsel'"
-        :recipient="recipient"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
 
       <!-- 문의 이력 -->
       <Inquiry
         v-else-if="activeTab === 'inquiry'"
-        :recipient="recipient"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
 
       <!-- 서류 관리 -->
       <Document
-        v-else-if="activeTab === 'files'"
-        :recipient="recipient"
+        v-else-if="activeTab === 'document'"
+        :beneficiary-id="beneficiaryId"
+        :refresh-key="refreshKey"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch  } from 'vue'
 
 import Calender from '@/components/recipient/main/category/Calender.vue'
 import ServiceRental from '@/components/recipient/main/category/ServiceRental.vue'
 import Record from '@/components/recipient/main/category/Record.vue'
-import Counsel from '@/components/recipient/main/category/Counsel.vue'
 import Inquiry from '@/components/recipient/main/category/Inquiry.vue'
+import Counsel from '@/components/recipient/main/category/Counsel.vue'
 import Document from '@/components/recipient/main/category/Document.vue'
 
 const props = defineProps({
-  // 🔥 선택된 수급자 객체
-  recipient: {
-    type: Object,
-    default: null
-  },
-  serviceHistory: {
-    type: Array,
-    default: () => []
-  },
-  rentalItems: {
-    type: Array,
-    default: () => []
-  }
+  beneficiaryId: { type: Number, default: null },
+  refreshKey: Number,   // 하위 탭들이 새로고침 없이 수급자 정보 변경되면 자동 반영
+  monthlySummaryList: { type: Array, default: () => [] }
 })
 
-// 상단 탭 정의 (로컬 상태로 관리)
 const tabs = [
-  { key: 'schedule', label: '일정 관리' },
-  { key: 'service',  label: '서비스/렌탈' },
-  { key: 'record',   label: '기록 관리' },
-  { key: 'counsel',  label: '상담' },
-  { key: 'inquiry',  label: '문의이력' },
-  { key: 'files',    label: '서류관리' }
+  { key: 'calender', label: '일정 관리' },
+  { key: 'service', label: '서비스/렌탈' },
+  { key: 'record', label: '기록 관리' },
+  { key: 'counsel', label: '상담' },
+  { key: 'inquiry', label: '문의이력' },
+  { key: 'document', label: '서류관리' }
 ]
 
-const activeTab = ref('schedule')
+const activeTab = ref('calender')
+
+/*  수급자 정보 변경 감지 */
+watch(
+  () => props.refreshKey,
+  () => {
+    // 탭은 유지, 내부 컴포넌트들만 새로 반응하게
+    console.log('수급자 정보 변경 감지')
+  }
+)
+
 </script>
 
 <style scoped>
@@ -104,8 +108,6 @@ const activeTab = ref('schedule')
   padding: 14px 16px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
 }
-
-/* 상단 탭 영역 */
 .bottom-tabs {
   display: flex;
   gap: 24px;
@@ -113,8 +115,6 @@ const activeTab = ref('schedule')
   margin: 0 -16px 8px;
   padding: 0 16px;
 }
-
-/* 탭 버튼 기본 스타일 */
 .bottom-tab-btn {
   position: relative;
   border: none;
@@ -125,15 +125,11 @@ const activeTab = ref('schedule')
   color: #6b7280;
   border-radius: 0;
 }
-
-/* 활성 탭 */
 .bottom-tab-btn.active {
   background: transparent;
   color: #16a34a;
   font-weight: 600;
 }
-
-/* 활성 탭 밑줄 */
 .bottom-tab-btn.active::after {
   content: '';
   position: absolute;
@@ -144,8 +140,6 @@ const activeTab = ref('schedule')
   background-color: #16a34a;
   border-radius: 999px;
 }
-
-/* 컨텐츠 영역 */
 .bottom-content {
   font-size: 13px;
   padding-top: 8px;

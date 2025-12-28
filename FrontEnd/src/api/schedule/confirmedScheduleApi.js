@@ -53,3 +53,22 @@ export const getConfirmedScheduleDetail = async ({ vsId } = {}) => {
   
     return res.data;
 };
+
+// 일정 시간 수정
+export const updateConfirmedVisitScheduleTime = async ({ vsId, startDt, endDt }) => {
+  if (!vsId) throw new Error('vsId is required');
+
+  const res = await api.put(
+    `/confirmed-calendar/visit-schedules/${vsId}/time`,
+    { startDt, endDt }
+  );
+
+  return res.data;
+};
+
+// 일정 삭제
+export const deleteConfirmedVisitSchedule = async ({ vsId }) => {
+  if (!vsId) throw new Error('vsId is required');
+
+  await api.delete(`/confirmed-calendar/visit-schedules/${vsId}`);
+};

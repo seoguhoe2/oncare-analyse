@@ -1,8 +1,7 @@
+<!-- src/components/recipient/main/category/modal/RentalModal.vue -->
 <template>
-  <!-- 바깥 영역 클릭 시 닫힘 -->
   <div v-if="modelValue" class="modal-backdrop" @click.self="close">
     <div class="modal-panel" :class="{ current: isCurrent, past: !isCurrent }">
-      <!-- 헤더 -->
       <header class="modal-header">
         <div class="title-row">
           <h3>렌탈 용품 상세</h3>
@@ -12,177 +11,196 @@
         <div class="item-row">
           <div class="item-name">
             <span class="item-icon">📦</span>
-            <span>{{ item?.name }}</span>
+            <span>{{ detail?.productName ?? summaryItem?.productName ?? "-" }}</span>
           </div>
-          <span
-            class="status-pill"
-            :class="isCurrent ? 'using' : 'done'"
-          >
-            {{ statusLabel }}
+
+          <!-- ✅ 종료면 서비스 해지 색과 동일 -->
+          <span class="status-pill" :class="statusPillClass">
+            {{ detail?.contractStatusName ?? summaryItem?.contractStatusName ?? statusFallback }}
           </span>
         </div>
       </header>
 
-      <!-- 본문 -->
-      <section class="modal-body" v-if="item">
-        <!-- 계약 정보 -->
-        <section class="section-block">
-          <h4>계약 정보</h4>
-          <div class="grid-2">
-            <div class="field">
-              <div class="label">계약 번호</div>
-              <div class="value">{{ item.code }}</div>
-            </div>
-            <div class="field">
-              <div class="label">계약 체결일</div>
-              <div class="value">{{ item.contractDate || item.startDate || '-' }}</div>
-            </div>
-            <div class="field">
-              <div class="label">공급업체</div>
-              <div class="value">{{ item.vendor || '메디케어' }}</div>
-            </div>
-            <div class="field">
-              <div class="label">월 렌탈료</div>
-              <div class="value">{{ formatCurrency(item.amount) }}</div>
-            </div>
-          </div>
-        </section>
+      <section class="modal-body">
+        <div v-if="loading" class="state-text">불러오는 중...</div>
+        <div v-else-if="errorMsg" class="state-text error">{{ errorMsg }}</div>
 
-        <!-- 사용 기간 -->
-        <section class="section-block">
-          <h4>사용 기간</h4>
-          <div class="grid-2">
-            <div class="field">
-              <div class="label">시작일</div>
-              <div class="value">{{ item.startDate || '-' }}</div>
-            </div>
-            <div class="field">
-              <div class="label">
-                {{ isCurrent ? '만료일' : '반납일' }}
+        <template v-else-if="detail">
+          <section class="section-block">
+            <h4>계약 정보</h4>
+            <div class="grid-2">
+              <div class="field">
+                <div class="label">계약 ID</div>
+                <div class="value">{{ detail.rentalContractId }}</div>
               </div>
-              <div class="value">{{ item.endDate || item.returnDate || '-' }}</div>
+              <div class="field">
+                <div class="label">용품 자산번호</div>
+                <div class="value">{{ detail.productAssetId }}</div>
+              </div>
+              <div class="field">
+                <div class="label">계약 체결일</div>
+                <div class="value">{{ detail.contractDate || detail.startDate || "-" }}</div>
+              </div>
+              <div class="field">
+                <div class="label">월 렌탈료</div>
+                <div class="value">{{ formatCurrency(detail.monthlyAmount) }}</div>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <!-- 현재 계약일 때만 안내 배너 -->
-          <div v-if="isCurrent" class="info-banner">
-            <span class="dot"></span>
-            <span>
-              계약 만료
-              <strong>{{ item.remainingDays ?? '—' }}일</strong> 전과
-              <strong>{{ durationLabel }}</strong> 기준으로 안내됩니다.
-            </span>
-          </div>
-        </section>
+          <section class="section-block">
+            <h4>사용 기간</h4>
+            <div class="grid-2">
+              <div class="field">
+                <div class="label">시작일</div>
+                <div class="value">{{ detail.startDate || "-" }}</div>
+              </div>
+              <div class="field">
+                <div class="label">{{ isCurrent ? "만료일" : "종료일" }}</div>
+                <div class="value">{{ detail.endDate || (isCurrent ? "진행중" : "-") }}</div>
+              </div>
+            </div>
+          </section>
 
-        <!-- 비용 정보 -->
-        <section class="section-block">
-          <h4>비용 정보</h4>
-          <div class="cost-box">
-            <div class="cost-row">
-              <span class="label">사용 기간</span>
-              <span class="value">
-                {{ durationLabel }}
-              </span>
+          <section class="section-block">
+            <h4>비용 정보</h4>
+            <div class="cost-box">
+              <div class="cost-row">
+                <span class="label">사용 기간</span>
+                <span class="value">{{ durationLabel }}</span>
+              </div>
+              <div class="cost-row">
+                <span class="label">월 렌탈료</span>
+                <span class="value">{{ formatCurrency(detail.monthlyAmount) }}</span>
+              </div>
+              <div class="cost-row total">
+                <span class="label">총 비용</span>
+                <span class="value">{{ formatCurrency(detail.totalCost) }}</span>
+              </div>
             </div>
-            <div class="cost-row">
-              <span class="label">월 렌탈료</span>
-              <span class="value">{{ formatCurrency(item.amount) }}</span>
-            </div>
-            <div class="cost-row total">
-              <span class="label">총 비용</span>
-              <span class="value">
-                {{ formatCurrency(item.totalAmount || (item.amount || 0) * (item.durationMonths || item.count || 1)) }}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <!-- 비고 -->
-        <section class="section-block">
-          <h4>비고</h4>
-          <textarea
-            class="memo-input"
-            rows="2"
-            :value="item.memo || ''"
-            readonly
-          />
-        </section>
+          </section>
+        </template>
       </section>
 
-      <!-- 푸터 버튼 -->
       <footer class="modal-footer">
         <button
           v-if="isCurrent"
           type="button"
           class="primary-btn danger"
+          :disabled="completing || loading"
           @click="onCompleteClick"
         >
-          계약 완료로 변경
+          {{ completing ? "처리 중..." : "계약 완료로 변경" }}
         </button>
-        <button
-          v-else
-          type="button"
-          class="primary-btn"
-          @click="close"
-        >
-          닫기
-        </button>
+
+        <button v-else type="button" class="primary-btn" @click="close">닫기</button>
       </footer>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from "vue";
+import api from "@/lib/api";
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  // 선택된 렌탈 아이템
-  item: {
-    type: Object,
-    default: null
-  },
-  // 'current' | 'past'
-  type: {
-    type: String,
-    default: 'current'
-  }
-})
+  modelValue: { type: Boolean, default: false },
+  beneficiaryId: { type: Number, required: true },
+  summaryItem: { type: Object, default: null }, // rentalContractId + productAssetId 필요
+  type: { type: String, default: "current" },   // 'current' | 'past'
+});
 
-const emit = defineEmits(['update:modelValue', 'complete'])
+const emit = defineEmits(["update:modelValue", "completed"]);
 
-const isCurrent = computed(() => props.type === 'current')
+const isCurrent = computed(() => props.type === "current");
 
-const statusLabel = computed(() => {
-  if (!props.item) return ''
-  // 없으면 기본 라벨
-  return props.item.status || (isCurrent.value ? '사용중' : '반납완료')
-})
+const loading = ref(false);
+const errorMsg = ref("");
+const detail = ref(null);
+
+const completing = ref(false);
+
+const statusFallback = computed(() => (isCurrent.value ? "계약중" : "종료"));
 
 const durationLabel = computed(() => {
-  const item = props.item || {}
-  if (item.durationLabel) return item.durationLabel
-  if (item.durationMonths) return `${item.durationMonths}개월`
-  if (item.count) return `${item.count}개월`
-  return ''
-})
+  const m = detail.value?.durationMonths;
+  return m ? `${m}개월` : "";
+});
 
-const formatCurrency = (n) =>
-  (n ?? 0).toLocaleString('ko-KR') + '원'
+const formatCurrency = (n) => `${(n ?? 0).toLocaleString("ko-KR")}원`;
 
-const close = () => {
-  emit('update:modelValue', false)
-}
+const close = () => emit("update:modelValue", false);
 
-const onCompleteClick = () => {
-  // 부모에게 완료 이벤트 전달 (상태 변경 로직은 부모에서 처리)
-  emit('complete', props.item)
-  emit('update:modelValue', false)
-}
+const fetchDetail = async () => {
+  if (!props.modelValue) return;
+
+  if (!props.beneficiaryId || !props.summaryItem?.rentalContractId || !props.summaryItem?.productAssetId) {
+    detail.value = null;
+    errorMsg.value = "상세 조회 정보가 부족합니다.";
+    return;
+  }
+
+  loading.value = true;
+  errorMsg.value = "";
+  detail.value = null;
+
+  try {
+    const { data } = await api.get(
+      `/api/beneficiaries/${props.beneficiaryId}/rentals/${props.summaryItem.rentalContractId}/products/${encodeURIComponent(
+        props.summaryItem.productAssetId
+      )}`
+    );
+    detail.value = data ?? null;
+  } catch (e) {
+    console.error(e);
+    detail.value = null;
+    errorMsg.value = "렌탈 상세 정보를 불러오지 못했습니다.";
+  } finally {
+    loading.value = false;
+  }
+};
+
+watch(
+  () => [props.modelValue, props.beneficiaryId, props.summaryItem?.rentalContractId, props.summaryItem?.productAssetId],
+  fetchDetail,
+  { immediate: true }
+);
+
+/** ✅ 종료면 회색(state-off), 아니면 current/past에 따라 기본값 */
+const statusPillClass = computed(() => {
+  const s = String(detail.value?.contractStatusName ?? props.summaryItem?.contractStatusName ?? statusFallback.value).trim();
+  if (s === "종료") return "ended"; // 서비스 해지 색
+  return isCurrent.value ? "using" : "done";
+});
+
+const onCompleteClick = async () => {
+  if (completing.value) return;
+
+  const rentalContractId = props.summaryItem?.rentalContractId;
+  if (!props.beneficiaryId || !rentalContractId) return;
+
+  completing.value = true;
+  errorMsg.value = "";
+
+  try {
+    const { data } = await api.patch(
+      `/api/beneficiaries/${props.beneficiaryId}/rentals/${rentalContractId}/complete`
+    );
+
+    if (!data?.success) {
+      errorMsg.value = data?.message || "계약 완료 처리에 실패했습니다.";
+      return;
+    }
+
+    emit("completed", data);
+    emit("update:modelValue", false);
+  } catch (e) {
+    console.error(e);
+    errorMsg.value = "계약 완료 처리에 실패했습니다.";
+  } finally {
+    completing.value = false;
+  }
+};
 </script>
 
 <style scoped>
@@ -207,7 +225,6 @@ const onCompleteClick = () => {
   overflow: hidden;
 }
 
-/* 타입별 헤더 배경 */
 .modal-panel.current .modal-header {
   background: #ecfdf3;
 }
@@ -226,13 +243,11 @@ const onCompleteClick = () => {
   justify-content: space-between;
   margin-bottom: 10px;
 }
-
 .title-row h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
 }
-
 .close-btn {
   border: none;
   background: transparent;
@@ -246,14 +261,12 @@ const onCompleteClick = () => {
   align-items: center;
   justify-content: space-between;
 }
-
 .item-name {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
 }
-
 .item-icon {
   width: 28px;
   height: 28px;
@@ -264,6 +277,7 @@ const onCompleteClick = () => {
   justify-content: center;
 }
 
+/* ✅ 상태 pill */
 .status-pill {
   padding: 4px 10px;
   border-radius: 999px;
@@ -278,6 +292,11 @@ const onCompleteClick = () => {
   background-color: #e5e7eb;
   color: #4b5563;
 }
+/* ✅ 종료면 "서비스 해지(state-off)" 색과 동일 */
+.status-pill.ended {
+  background-color: #e5e7eb; /* state-off 배경 */
+  color: #374151;           /* state-off 글자 */
+}
 
 .modal-body {
   padding: 18px 20px 12px;
@@ -285,10 +304,18 @@ const onCompleteClick = () => {
   overflow-y: auto;
 }
 
+.state-text {
+  padding: 10px 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+.state-text.error {
+  color: #b91c1c;
+}
+
 .section-block + .section-block {
   margin-top: 16px;
 }
-
 .section-block h4 {
   margin: 0 0 8px;
   font-size: 13px;
@@ -301,7 +328,6 @@ const onCompleteClick = () => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px 16px;
 }
-
 .field .label {
   font-size: 11px;
   color: #6b7280;
@@ -310,24 +336,6 @@ const onCompleteClick = () => {
 .field .value {
   font-size: 13px;
   color: #111827;
-}
-
-.info-banner {
-  margin-top: 10px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background-color: #eef2ff;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #4f46e5;
-}
-.info-banner .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background-color: #4f46e5;
 }
 
 .cost-box {
@@ -358,21 +366,10 @@ const onCompleteClick = () => {
   font-weight: 700;
 }
 
-.memo-input {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  padding: 8px 10px;
-  font-size: 12px;
-  resize: none;
-  background: #f9fafb;
-}
-
 .modal-footer {
   padding: 12px 20px 16px;
   border-top: 1px solid #e5e7eb;
 }
-
 .primary-btn {
   width: 100%;
   border-radius: 999px;
@@ -386,6 +383,10 @@ const onCompleteClick = () => {
 }
 .primary-btn.danger {
   background: #dc2626;
+}
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 540px) {

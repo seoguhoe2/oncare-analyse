@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class NewSubscriptionResponse {
+public class NewSubscriptionResponse implements CounselHistoryResponse {
     private BigInteger counselHistoryId;
     private int counselCategoryId;
     private String detail;

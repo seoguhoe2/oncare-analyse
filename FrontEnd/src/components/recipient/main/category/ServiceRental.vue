@@ -14,45 +14,49 @@
       </button>
     </div>
 
-    <!-- 서비스 내역 -->
+    <!-- ✅ 서비스 내역 -->
     <ServiceView
       v-if="activeSubTab === 'service'"
-      :service-history="serviceHistory"
+      :key="`service-${beneficiaryId}`"
+      :beneficiary-id="beneficiaryId"
     />
 
-    <!-- 렌탈 용품 -->
+    <!-- ✅ 렌탈 용품 -->
     <RentalView
       v-else
-      :rental-items="rentalItems"
+      :key="`rental-${beneficiaryId}`"
+      :beneficiary-id="beneficiaryId"
     />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref,watch } from 'vue'
 import ServiceView from './servicerental/Service.vue'
 import RentalView from './servicerental/Rental.vue'
 
 const props = defineProps({
-  serviceHistory: {
-    type: Array,
-    default: () => []
-  },
-  rentalItems: {
-    type: Array,
-    default: () => []
-  }
-})
+  beneficiaryId: { type: Number, default: null },
+  refreshKey: Number})
 
 const subTabs = [
   { key: 'service', label: '서비스 내역' },
   { key: 'rental', label: '렌탈 용품' }
 ]
 const activeSubTab = ref('service')
+
+/*  수급자 정보 변경 감지 */
+watch(
+  () => props.refreshKey,
+  () => {
+    // 하위 View들이 beneficiaryId 기준으로 fetch 하므로
+    // 여기서는 탭만 유지
+    console.log('[ServiceRental] refresh')
+  }
+)
 </script>
 
 <style scoped>
-/* 서브탭 전체 영역 */
 .service-subtabs {
   display: flex;
   gap: 24px;
@@ -60,7 +64,6 @@ const activeSubTab = ref('service')
   margin-bottom: 12px;
 }
 
-/* 서브탭 버튼 기본 */
 .service-subtab-btn {
   position: relative;
   border: none;
@@ -71,13 +74,11 @@ const activeSubTab = ref('service')
   cursor: pointer;
 }
 
-/* 활성 탭 */
 .service-subtab-btn.active {
-  color: #16a34a;      /* 초록 텍스트 */
+  color: #16a34a;
   font-weight: 600;
 }
 
-/* 활성 탭 언더라인 */
 .service-subtab-btn.active::after {
   content: '';
   position: absolute;
@@ -88,6 +89,4 @@ const activeSubTab = ref('service')
   background-color: #16a34a;
   border-radius: 999px;
 }
-
-
 </style>

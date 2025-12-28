@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class SubscriptionResponse {
+public class SubscriptionResponse implements CounselHistoryResponse {
     private BigInteger counselHistoryId;
     private int counselCategoryId;
     private String detail;
@@ -29,6 +30,5 @@ public class SubscriptionResponse {
     private BigInteger potentialId;
 
     // 가입 상담 관리 내용
-    private int stage;
-    private String htmlCode;
+    private Map<Integer,StageData> stageData;
 }

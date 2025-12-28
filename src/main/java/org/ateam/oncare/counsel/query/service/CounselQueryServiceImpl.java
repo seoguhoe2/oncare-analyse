@@ -59,4 +59,9 @@ public class CounselQueryServiceImpl implements CounselQueryService {
     public @Nullable CounselDetailResponse findCounselDetailById(BigInteger counselHistoryId) {
         return counselQueryMapper.findCounselDetailById(counselHistoryId);
     }
+
+    @Override
+    public Long findPotentialIdByBeneficiaryId(Long beneficiaryId) {
+        return counselQueryMapper.findPotentialIdByBeneficiaryId(beneficiaryId);
+    }
 }

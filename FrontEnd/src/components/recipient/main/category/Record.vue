@@ -1,3 +1,4 @@
+<!-- src/components/recipient/category/Record.vue -->
 <template>
   <div class="record-tab">
     <!-- 상단 세부 탭 -->
@@ -15,23 +16,51 @@
     </div>
 
     <!-- 요약일지 -->
-    <SummaryRecord v-if="activeSubTab === 'summary'" />
+    <SummaryRecord
+      v-if="activeSubTab === 'summary'"
+      :monthly-summary-list="monthlySummaryList"
+      :beneficiary-id="beneficiaryId"
+    />
 
     <!-- 기초평가 -->
-    <BasicTest v-else />
+    <BasicTest
+      v-else
+      :beneficiary-id="beneficiaryId"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref,watch } from 'vue'
 import SummaryRecord from './record/SummaryRecord.vue'
 import BasicTest from './record/BasicTest.vue'
+
+// ✅ 상위(RecipientCategory)에서 내려주는 기록 데이터 + 수급자 ID
+const props = defineProps({
+  monthlySummaryList: {
+    type: Array,
+    default: () => []
+  },
+  beneficiaryId: {
+    type: Number,
+    default: null
+  },
+  refreshKey: Number
+})
 
 const subTabs = [
   { key: 'summary', label: '요약일지' },
   { key: 'baseline', label: '기초평가' }
 ]
+
 const activeSubTab = ref('summary')
+
+watch(
+  () => props.refreshKey,
+  () => {
+    console.log('[Record] refresh')
+  }
+)
 </script>
 
 <style>

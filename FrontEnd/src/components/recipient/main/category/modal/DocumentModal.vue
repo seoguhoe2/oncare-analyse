@@ -1,3 +1,4 @@
+<!-- src/components/recipient/main/category/modal/DocumentModal.vue -->
 <template>
   <div v-if="modelValue" class="modal-backdrop" @click.self="close">
     <div class="modal-panel">
@@ -13,14 +14,16 @@
       <section class="modal-body" v-if="doc">
         <!-- 상단 문서 카드 -->
         <div class="doc-preview-card">
-          <div class="doc-icon">
-            📄
-          </div>
+          <div class="doc-icon">📄</div>
+
+          <!-- ✅ 모달 제목: originalFileName -->
           <div class="doc-title">
-            {{ doc.name }}
+            {{ doc.originalFileName || '-' }}
           </div>
+
+          <!-- ✅ 파일형식 · 파일크기 -->
           <div class="doc-sub">
-            {{ fileTypeLabel }} · {{ doc.size }}
+            {{ mimeLabel }} · {{ doc.fileSize || '-' }}
           </div>
         </div>
 
@@ -28,41 +31,32 @@
         <div class="meta-grid">
           <div class="meta-item">
             <div class="label">업로드 날짜</div>
-            <div class="value">{{ doc.date || '-' }}</div>
+            <div class="value">{{ doc.createdAt || '-' }}</div>
           </div>
+
           <div class="meta-item">
             <div class="label">파일 크기</div>
-            <div class="value">{{ doc.size || '-' }}</div>
+            <div class="value">{{ doc.fileSize || '-' }}</div>
           </div>
+
           <div class="meta-item">
             <div class="label">파일 형식</div>
-            <div class="value">{{ fileTypeLabel }}</div>
+            <div class="value">{{ mimeLabel }}</div>
           </div>
+        </div>
+
+        <div v-if="errorMsg" class="error-box">
+          {{ errorMsg }}
         </div>
       </section>
 
       <!-- 푸터 버튼 -->
       <footer class="modal-footer">
-        <button
-          type="button"
-          class="btn btn-preview"
-          @click="onPreview"
-        >
+        <button type="button" class="btn btn-preview" @click="onPreview" :disabled="busy">
           👁 미리보기
         </button>
-        <button
-          type="button"
-          class="btn btn-download"
-          @click="onDownload"
-        >
+        <button type="button" class="btn btn-download" @click="onDownload" :disabled="busy">
           ⬇ 다운로드
-        </button>
-        <button
-          type="button"
-          class="btn btn-delete"
-          @click="onDelete"
-        >
-          🗑 삭제
         </button>
       </footer>
     </div>
@@ -70,25 +64,23 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import api from '@/lib/api'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
-  document: {
-    type: Object,
-    default: null
-  }
+  modelValue: { type: Boolean, default: false },
+
+  beneficiaryId: { type: [Number, String], required: true },
+  formId: { type: [Number, String], default: null },
+
+  // ✅ 목록에서 받은 FormListItem(메타 표시용)
+  document: { type: Object, default: null }
 })
 
-const emit = defineEmits([
-  'update:modelValue',
-  'preview',
-  'download',
-  'delete'
-])
+const emit = defineEmits(['update:modelValue'])
+
+const errorMsg = ref('')
+const busy = ref(false)
 
 const close = () => {
   emit('update:modelValue', false)
@@ -96,23 +88,81 @@ const close = () => {
 
 const doc = computed(() => props.document)
 
-const fileTypeLabel = computed(() => {
-  if (!doc.value) return 'PDF'
-  // doc.type 이 있으면 사용, 없으면 이름에서 확장자 추출
-  if (doc.value.type) return doc.value.type
-  const name = doc.value.name || ''
-  const ext = name.includes('.') ? name.split('.').pop() : ''
-  return ext ? ext.toUpperCase() : 'PDF'
+const mimeLabel = computed(() => {
+  const mime = doc.value?.mimeType || ''
+  return mime ? mime : 'application/pdf'
 })
 
-const onPreview = () => {
-  emit('preview', doc.value)
+// 모달 열릴 때마다 에러 초기화
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (open) errorMsg.value = ''
+  }
+)
+
+// ✅ 미리보기: 새 탭 열기 (inline)
+//const onPreview = () => {
+//  if (!props.beneficiaryId || !props.formId) return
+//  // 백엔드가 Content-Disposition inline으로 내려주므로 새 탭에서 바로 보기 좋음
+//  const url = `/api/beneficiaries/${props.beneficiaryId}/forms/${props.formId}/preview`
+//  window.open(url, '_blank')
+//}
+const onPreview = async () => {
+  if (!props.beneficiaryId || !props.formId) return
+  busy.value = true
+  errorMsg.value = ''
+
+  try {
+    // baseURL이 이미 /api면 앞의 /api 제거해서 맞춰야 함(아래 path는 상황에 맞게!)
+    const path = `/api/beneficiaries/${props.beneficiaryId}/forms/${props.formId}/preview`
+
+    const res = await api.get(path, { responseType: 'blob' })
+
+    const blob = new Blob([res.data], { type: res.headers?.['content-type'] || 'application/pdf' })
+    const objectUrl = window.URL.createObjectURL(blob)
+
+    window.open(objectUrl, '_blank')
+
+    // 너무 빨리 revoke하면 새탭이 못 읽을 수 있어서 약간 딜레이
+    setTimeout(() => window.URL.revokeObjectURL(objectUrl), 10_000)
+  } catch (e) {
+    console.error('미리보기 실패:', e)
+    errorMsg.value = '미리보기에 실패했습니다.'
+  } finally {
+    busy.value = false
+  }
 }
-const onDownload = () => {
-  emit('download', doc.value)
-}
-const onDelete = () => {
-  emit('delete', doc.value)
+
+
+
+// ✅ 다운로드: blob 받아서 저장
+const onDownload = async () => {
+  if (!props.beneficiaryId || !props.formId) return
+  busy.value = true
+  errorMsg.value = ''
+
+  try {
+    const url = `/api/beneficiaries/${props.beneficiaryId}/forms/${props.formId}/download`
+    const res = await api.get(url, { responseType: 'blob' })
+
+    const blob = new Blob([res.data], { type: res.headers?.['content-type'] || 'application/octet-stream' })
+    const objectUrl = window.URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = doc.value?.originalFileName || 'download'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+
+    window.URL.revokeObjectURL(objectUrl)
+  } catch (e) {
+    console.error('다운로드 실패:', e)
+    errorMsg.value = '다운로드에 실패했습니다.'
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 
@@ -207,6 +257,15 @@ const onDelete = () => {
   color: #111827;
 }
 
+.error-box {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 12px;
+}
+
 /* 푸터 */
 .modal-footer {
   padding: 12px 20px 16px;
@@ -228,16 +287,16 @@ const onDelete = () => {
   justify-content: center;
   gap: 4px;
 }
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .btn-preview {
   background: #2563eb;
   color: #ffffff;
 }
 .btn-download {
   background: #16a34a;
-  color: #ffffff;
-}
-.btn-delete {
-  background: #dc2626;
   color: #ffffff;
 }
 
