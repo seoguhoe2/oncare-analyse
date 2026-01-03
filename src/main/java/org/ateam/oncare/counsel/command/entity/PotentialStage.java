@@ -2,8 +2,12 @@ package org.ateam.oncare.counsel.command.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.ateam.oncare.counsel.command.converter.JsonToMapConverter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Entity
 @Getter
@@ -28,14 +32,22 @@ public class PotentialStage {
     @Column(name = "process_time")
     private LocalDateTime processTime;
 
-    @Column(name = "month", nullable = false)
-    private LocalDateTime month;
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
 
-    @Lob // TEXT 타입 매핑
-    @Column(name = "html_code", nullable = false, columnDefinition = "TEXT")
-    private String htmlCode;
+    // Map -> JSON 변환 위해 @JdbcTypeCode 사용
+    @Convert(converter = JsonToMapConverter.class)
+    @Column(columnDefinition = "longtext")
+    private Map<String, Object> stageData;
 
-    // [변경됨] 객체 참조(@ManyToOne) 대신 ID 값 직접 매핑
     @Column(name = "potential_customer_id", nullable = false)
     private Long potentialCustomerId;
+
+    public void updateStageData(Map<String, Object> stageData, String newProcessStatus) {
+        this.stageData = stageData;
+        if (!newProcessStatus.equals(this.processStatus)) {
+            this.processStatus = newProcessStatus;
+            this.processTime = LocalDateTime.now();
+        }
+    }
 }

@@ -4,7 +4,6 @@
     <div v-else-if="error" class="error">{{ error }}</div>
 
     <template v-else>
-      <!-- 1) 이름/성별 -->
       <header class="header-row">
         <div class="basic-info">
           <div class="name-row">
@@ -14,10 +13,8 @@
             </span>
           </div>
 
-          <!-- 2) 주소 -->
           <p class="address">{{ viewModel.address }}</p>
 
-          <!-- 3) 연락처 (주소 밑) -->
           <div class="phone-row">
             <div class="label">연락처</div>
             <div class="value">{{ viewModel.phone || '-' }}</div>
@@ -25,7 +22,6 @@
         </div>
       </header>
 
-      <!-- 4) 근무중인 시간 -->
       <div class="field">
         <div class="label">근무 중인 시간</div>
         <div class="time-list">
@@ -39,7 +35,6 @@
         </div>
       </div>
 
-      <!-- 5) 자격증 -->
       <div class="field">
         <div class="label">자격증</div>
         <div class="value">
@@ -52,7 +47,6 @@
         </div>
       </div>
 
-      <!-- 6) 서비스/태그 나란히 -->
       <div class="info-section two-col">
         <div class="column">
           <div class="field">
@@ -82,6 +76,11 @@
           </div>
         </div>
       </div>
+
+      <div class="tag-description">
+        요양보호사는 수급자의 태그 매칭을 바탕으로
+        거리가 가까운 요양보호사를 추천합니다.
+      </div>
     </template>
   </section>
 </template>
@@ -90,10 +89,14 @@
 import { ref, computed, watch } from 'vue'
 import clockIcon from '@/assets/img/schedule/clock.png'
 import { getCareWorkerDetail } from '@/api/schedule/matching.js'
+import { useMatchingSelectionStore } from '@/stores/matchingSelection'
 
 const props = defineProps({
   caregiver: { type: Object, default: null },
+  refreshKey: { type: Number, default: 0 },
 })
+
+const store = useMatchingSelectionStore()
 
 const loading = ref(false)
 const error = ref('')
@@ -109,10 +112,9 @@ const normalizeTime = (t) => {
 
 const loadDetail = async () => {
   const careWorkerId = getCareWorkerId(props.caregiver)
-
   if (!careWorkerId) {
     detail.value = null
-    error.value = '요양보호사 ID가 없습니다.'
+    error.value = ''
     return
   }
 
@@ -121,6 +123,7 @@ const loadDetail = async () => {
     error.value = ''
     const res = await getCareWorkerDetail(careWorkerId)
     detail.value = res?.data ?? res ?? null
+    store.syncCaregiver(detail.value)
   } catch (e) {
     error.value = e?.response?.data?.message || '상세 정보를 불러오지 못했습니다.'
     detail.value = null
@@ -135,28 +138,31 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => props.refreshKey,
+  () => loadDetail()
+)
+
 const viewModel = computed(() => {
-  const base = props.caregiver || {}
+  const base = props.caregiver || store.caregiver || {}
   const d = detail.value || {}
 
   const rawGender = d.gender ?? base.gender
-  const gender = rawGender === 'M' ? '남자' : rawGender === 'F' ? '여자' : rawGender || '-'
+  const gender =
+    rawGender === 'M' ? '남자' :
+    rawGender === 'F' ? '여자' :
+    rawGender || '-'
 
-  const serviceTypes = d.serviceTypes || []
-  const tags = d.tags || []
-  const certificates = d.certificates || []
-
-  const workingTimes =
-    (d.workingTimes || [])
-      .map((w) => {
-        const dayName = w.dayName || ''
-        const st = normalizeTime(w.startTime)
-        const et = normalizeTime(w.endTime)
-        const svc = w.serviceTypeName ? ` · ${w.serviceTypeName}` : ''
-        if (!dayName || !st || !et) return null
-        return `${dayName} ${st}-${et}${svc}`
-      })
-      .filter(Boolean)
+  const workingTimes = (d.workingTimes ?? [])
+    .map((w) => {
+      const dayName = w.dayName || ''
+      const st = normalizeTime(w.startTime)
+      const et = normalizeTime(w.endTime)
+      const svc = w.serviceTypeName ? ` · ${w.serviceTypeName}` : ''
+      if (!dayName || !st || !et) return null
+      return `${dayName} ${st}-${et}${svc}`
+    })
+    .filter(Boolean)
 
   return {
     careWorkerId: d.careWorkerId ?? getCareWorkerId(base),
@@ -164,9 +170,9 @@ const viewModel = computed(() => {
     gender,
     address: d.address ?? base.address ?? '-',
     phone: d.phone ?? base.phone ?? '',
-    serviceTypes,
-    tags,
-    certificates,
+    serviceTypes: d.serviceTypes ?? [],
+    tags: d.tags ?? [],
+    certificates: d.certificates ?? [],
     workingTimes,
   }
 })
@@ -335,5 +341,13 @@ const viewModel = computed(() => {
 .pill.soft {
   background: #e0f2fe;
   color: #0369a1;
+}
+.tag-description {
+  margin-top: 20px;          /* 서비스/태그 줄과 간격 */
+  max-width: 220px;         
+  font-size: 13px;
+  line-height: 1.6;
+  color: #6b7280;
+  word-break: keep-all;
 }
 </style>

@@ -9,7 +9,10 @@
           <div class="name-row">
             <span class="name">{{ viewModel.name }}</span>
             <span class="badge grade">{{ viewModel.grade }}</span>
-            <span class="badge gender" :class="viewModel.gender === '여자' ? 'female' : 'male'">
+            <span
+              class="badge gender"
+              :class="viewModel.gender === '여자' ? 'female' : 'male'"
+            >
               {{ viewModel.gender }}
             </span>
           </div>
@@ -36,7 +39,6 @@
             </div>
           </div>
 
-          <!-- ✅ 위험요소 -->
           <div class="field">
             <div class="label">위험요소</div>
             <div class="value">
@@ -49,7 +51,6 @@
             </div>
           </div>
 
-          <!-- ✅ 태그 -->
           <div class="field">
             <div class="label">태그</div>
             <div class="value">
@@ -63,7 +64,14 @@
           </div>
 
           <div class="field">
-            <div class="label">희망 요일</div>
+            <div class="label-row">
+              <div class="label">희망 요일</div>
+
+              <button type="button" class="edit-schedule-btn" @click="openScheduleModal">
+                희망 요일/시간 변경하기
+              </button>
+            </div>
+
             <div class="value">
               <template v-if="viewModel.preferredDays?.length">
                 <span v-for="d in viewModel.preferredDays" :key="d" class="day-pill">
@@ -92,7 +100,15 @@
       <section class="assigned-section">
         <h3 class="assigned-title">배정된 요양보호사</h3>
 
-        <article v-if="viewModel.assignedCareWorker" class="assigned-card">
+        <article
+          v-if="viewModel.assignedCareWorker"
+          class="assigned-card"
+          role="button"
+          tabindex="0"
+          @click="selectAssignedCareWorker"
+          @keydown.enter.prevent="selectAssignedCareWorker"
+          @keydown.space.prevent="selectAssignedCareWorker"
+        >
           <div class="assigned-left">
             <div class="assigned-main">
               <div class="assigned-row">
@@ -110,145 +126,375 @@
               </div>
             </div>
           </div>
+
+          <button type="button" class="close-btn" @click.stop="openUnassignModal">
+            <img :src="closeButton" alt="배정 취소" />
+          </button>
         </article>
 
         <p v-else class="assigned-empty">배정된 요양보호사가 없습니다</p>
       </section>
+
+      <teleport to="body">
+        <div
+          v-if="showUnassignModal"
+          class="modal-backdrop"
+          @click.self="closeUnassignModal"
+        >
+          <div class="modal">
+            <h3 class="modal-title">배정 취소</h3>
+            <p class="modal-desc">정말 배정을 삭제할까요?</p>
+
+            <div class="field">
+              <div class="label">기준일</div>
+              <input
+                type="date"
+                v-model="unassignEffectiveDate"
+                :min="todayYmd"
+                class="date-input"
+              />
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="modal-btn cancel" @click="closeUnassignModal">
+                취소
+              </button>
+              <button
+                type="button"
+                class="modal-btn danger"
+                :disabled="!unassignEffectiveDate"
+                @click="confirmUnassign"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="showScheduleModal"
+          class="modal-backdrop"
+          @click.self="closeScheduleModal"
+        >
+          <div class="modal schedule-modal">
+            <div class="schedule-modal-header">
+              <h3 class="modal-title">희망 요일/시간 변경</h3>
+            </div>
+
+            <div class="schedule-modal-body">
+              <EditScheduleModalBody
+                ref="editBodyRef"
+                :beneficiaryId="viewModel.beneficiaryId"
+                :recipientName="viewModel.name"
+                :schedules="viewModel.schedules"
+                :serviceTypeId="
+                  viewModel.serviceTypeId
+                  ?? viewModel.schedules?.[0]?.serviceTypeId
+                  ?? viewModel.schedules?.[0]?.service_type_id
+                  ?? null
+                "
+                :serviceTypeName="
+                  viewModel.serviceTypeName
+                  ?? viewModel.schedules?.[0]?.serviceTypeName
+                  ?? viewModel.schedules?.[0]?.service_type_name
+                  ?? ''
+                "
+                :assignedCareWorker="viewModel.assignedCareWorker"
+                :careWorkerWorkingTimes="careWorkerWorkingTimes"
+                @saved="handleScheduleSaved"
+              />
+            </div>
+
+            <div class="modal-actions schedule-actions">
+              <button type="button" class="modal-btn cancel" @click="closeScheduleModal">
+                닫기
+              </button>
+              <button
+                type="button"
+                class="modal-btn primary"
+                :disabled="editBodySaving"
+                @click="handleScheduleSave"
+              >
+                {{ editBodySaving ? '저장 중...' : '저장' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </teleport>
     </template>
   </section>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import clockIcon from '@/assets/img/schedule/clock.png'
-import { getBeneficiaryDetail } from '@/api/schedule/matching.js'
-
-const props = defineProps({
-  recipient: { type: Object, default: null },
-})
-
-const loading = ref(false)
-const error = ref('')
-const detail = ref(null)
-
-const getBeneficiaryId = (obj) => obj?.beneficiaryId ?? obj?.id ?? null
-
-const dayToKor = (day) => {
-  const map = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일' }
-  return map[day] || ''
-}
-
-const normalizeTime = (t) => {
-  if (!t) return ''
-  const s = String(t)
-  return s.length >= 5 ? s.slice(0, 5) : s
-}
-
-const buildPreferredFromSchedules = (schedules = []) => {
-  const daySet = new Set()
-  const timeLabels = schedules
-    .map((s) => {
-      const d = s.dayName || dayToKor(s.day)
-      const st = normalizeTime(s.startTime)
-      const et = normalizeTime(s.endTime)
-      if (!d || !st || !et) return null
-      daySet.add(d)
-      return `${d}요일 ${st}-${et}`
-    })
-    .filter(Boolean)
-
-  return {
-    preferredDays: Array.from(daySet),
-    preferredTimes: timeLabels,
+  import { ref, computed, watch } from 'vue'
+  import clockIcon from '@/assets/img/schedule/clock.png'
+  import closeButton from '@/assets/img/common/closeButton.png'
+  import {
+    getBeneficiaryDetail,
+    unassignMatchingCareWorker,
+    getCareWorkerDetail,
+  } from '@/api/schedule/matching.js'
+  import { useMatchingSelectionStore } from '@/stores/matchingSelection'
+  import EditScheduleModalBody from '@/components/schedule/matching/editSchedule/EditScheduleModalBody.vue'
+  
+  const props = defineProps({
+    recipient: { type: Object, default: null },
+  })
+  
+  const store = useMatchingSelectionStore()
+  const emit = defineEmits(['unassigned', 'assigned-careworker'])
+  
+  const careWorkerWorkingTimes = ref([])
+  
+  const loading = ref(false)
+  const error = ref('')
+  const detail = ref(null)
+  
+  const showUnassignModal = ref(false)
+  const showScheduleModal = ref(false)
+  
+  const unassignEffectiveDate = ref('')
+  
+  const editBodyRef = ref(null)
+  const editBodySaving = computed(() => !!editBodyRef.value?.isSaving?.value)
+  
+  const pad2 = (n) => String(n).padStart(2, '0')
+  const toYmd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+  const todayYmd = computed(() => toYmd(new Date()))
+  
+  const getBeneficiaryId = (obj) => obj?.beneficiaryId ?? obj?.id ?? null
+  const getCareWorkerId = (obj) => obj?.careWorkerId ?? obj?.id ?? null
+  
+  const pickServiceTypeId = (obj) =>
+    obj?.serviceTypeId ??
+    obj?.service_type_id ??
+    obj?.serviceTypeIdFk ??
+    obj?.serviceType?.id ??
+    obj?.serviceType ??
+    null
+  
+  const pickServiceTypeName = (obj) =>
+    obj?.serviceTypeName ??
+    obj?.service_type_name ??
+    obj?.serviceTypeLabel ??
+    obj?.serviceType?.name ??
+    (typeof obj?.serviceType === 'string' ? obj.serviceType : '') ??
+    ''
+  
+  const dayToKor = (day) => {
+    const map = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일' }
+    return map[day] || ''
   }
-}
-
-const loadDetail = async () => {
-  const beneficiaryId = getBeneficiaryId(props.recipient)
-  if (!beneficiaryId) {
-    detail.value = null
-    error.value = '수급자 ID가 없습니다.'
-    return
+  
+  const normalizeTime = (t) => {
+    if (!t) return ''
+    const s = String(t)
+    return s.length >= 5 ? s.slice(0, 5) : s
   }
-
-  try {
-    loading.value = true
-    error.value = ''
-    const res = await getBeneficiaryDetail(beneficiaryId)
-    detail.value = res?.data ?? res ?? null
-  } catch (e) {
-    error.value = e?.response?.data?.message || '상세 정보를 불러오지 못했습니다.'
-    detail.value = null
-  } finally {
-    loading.value = false
+  
+  const buildPreferredFromSchedules = (schedules = []) => {
+    const daySet = new Set()
+    const timeLabels = schedules
+      .map((s) => {
+        const d = s.dayName || dayToKor(s.day)
+        const st = normalizeTime(s.startTime)
+        const et = normalizeTime(s.endTime)
+        if (!d || !st || !et) return null
+        daySet.add(d)
+        return `${d}요일 ${st}-${et}`
+      })
+      .filter(Boolean)
+  
+    return {
+      preferredDays: Array.from(daySet),
+      preferredTimes: timeLabels,
+    }
   }
-}
-
-watch(
-  () => getBeneficiaryId(props.recipient),
-  () => loadDetail(),
-  { immediate: true }
-)
-
-const viewModel = computed(() => {
-  const base = props.recipient || {}
-  const d = detail.value || {}
-
-  const grade = d.riskLevel || d.grade || base.riskLevel || base.grade || '-'
-
-  const rawGender = d.gender ?? base.gender
-  const gender = rawGender === 'M' ? '남자' : rawGender === 'F' ? '여자' : rawGender || '-'
-
-  const schedules = d.schedules || d.beneficiarySchedules || []
-  const preferredFromSchedules = buildPreferredFromSchedules(schedules)
-
-  const preferredTimes =
-    d.preferredTimes || preferredFromSchedules.preferredTimes || base.preferredTimes || []
-  const preferredDays =
-    d.preferredDays || preferredFromSchedules.preferredDays || base.preferredDays || []
-
-  // ✅ 백엔드 응답 기준 (serviceTypes / tags / riskFactors)
-  const needServices =
-    d.serviceTypes ||
-    d.needServices ||
-    base.serviceTypes ||
-    base.needServices ||
-    []
-
-  const needTags =
-    d.tags ||
-    d.needTags ||
-    base.tags ||
-    base.needTags ||
-    []
-
-  const riskFactors =
-    d.riskFactors ||
-    d.riskTags ||          // 혹시 예전 키명이 이런 식이면 대응
-    d.risks ||
-    base.riskFactors ||
-    base.risks ||
-    []
-
-  const assignedCareWorker = d.assignedCareWorker || null
-
-  return {
-    beneficiaryId: getBeneficiaryId(base),
-    name: d.name ?? base.name ?? '-',
-    grade,
-    gender,
-    address: d.address ?? base.address ?? '-',
-    phone: d.phone ?? base.phone ?? '',
-    needServices,
-    needTags,
-    riskFactors,
-    preferredDays,
-    preferredTimes,
-    schedules,
-    assignedCareWorker,
+  
+  const loadDetail = async () => {
+    const beneficiaryId = getBeneficiaryId(props.recipient)
+    if (!beneficiaryId) {
+      detail.value = null
+      return
+    }
+  
+    try {
+      loading.value = true
+      error.value = ''
+      const res = await getBeneficiaryDetail(beneficiaryId)
+      detail.value = res?.data ?? res ?? null
+      store.syncRecipient(detail.value)
+    } catch (e) {
+      error.value = e?.response?.data?.message || '상세 정보를 불러오지 못했습니다.'
+      detail.value = null
+    } finally {
+      loading.value = false
+    }
   }
-})
-</script>
+  
+  const loadCareWorkerWorkingTimes = async (cw) => {
+    const careWorkerId = getCareWorkerId(cw)
+    if (!careWorkerId) {
+      careWorkerWorkingTimes.value = []
+      return
+    }
+  
+    try {
+      const res = await getCareWorkerDetail(careWorkerId)
+      const data = res?.data ?? res ?? {}
+      const raw = data.workingTimes ?? data.workTimes ?? data.careWorkerWorkingTimes ?? []
+      const list = Array.isArray(raw) ? raw : []
+  
+      careWorkerWorkingTimes.value = list.map((w) => ({
+        dayName: w.dayName ?? w.day_name ?? w.dayKor ?? w.day ?? '',
+        day: w.day ?? w.dayNum ?? w.day_no ?? w.dayNumber ?? w.day,
+        startTime: w.startTime ?? w.start_time ?? w.start ?? '',
+        endTime: w.endTime ?? w.end_time ?? w.end ?? '',
+        serviceTypeName: w.serviceTypeName ?? w.service_type_name ?? w.serviceType ?? '',
+      }))
+    } catch (e) {
+      careWorkerWorkingTimes.value = []
+    }
+  }
+  
+  const openScheduleModal = async () => {
+    const cw = viewModel.value.assignedCareWorker
+    if (cw) await loadCareWorkerWorkingTimes(cw)
+    showScheduleModal.value = true
+  }
+  
+  const closeScheduleModal = () => {
+    showScheduleModal.value = false
+  }
+  
+  const handleScheduleSave = async () => {
+    const ok = await editBodyRef.value?.save?.()
+    if (ok) {
+      await loadDetail()
+      store.refresh()
+      closeScheduleModal()
+    }
+  }
+  
+  const handleScheduleSaved = async () => {
+    await loadDetail()
+    store.refresh()
+  }
+  
+  const openUnassignModal = () => {
+    unassignEffectiveDate.value = todayYmd.value
+    showUnassignModal.value = true
+  }
+  
+  const closeUnassignModal = () => {
+    showUnassignModal.value = false
+  }
+  
+  const confirmUnassign = async () => {
+    const beneficiaryId = getBeneficiaryId(props.recipient)
+    if (!beneficiaryId) return
+  
+    if (!unassignEffectiveDate.value) {
+      alert('기준일을 선택해 주세요.')
+      return
+    }
+  
+    try {
+      loading.value = true
+      error.value = ''
+  
+      await unassignMatchingCareWorker(beneficiaryId, unassignEffectiveDate.value)
+  
+      await loadDetail()
+  
+      if (typeof store.clearCaregiver === 'function') {
+        store.clearCaregiver()
+      } else {
+        store.caregiver = null
+        store.caregiverId = null
+        store.refresh()
+      }
+  
+      careWorkerWorkingTimes.value = []
+      emit('unassigned', { beneficiaryId })
+    } catch (e) {
+      error.value = e?.response?.data?.message || '배정 취소에 실패했습니다.'
+    } finally {
+      loading.value = false
+      showUnassignModal.value = false
+    }
+  }
+  
+  watch(
+    () => getBeneficiaryId(props.recipient),
+    () => loadDetail(),
+    { immediate: true }
+  )
+  
+  const viewModel = computed(() => {
+    const base = props.recipient || {}
+    const d = detail.value || {}
+  
+    const grade = d.riskLevel || d.grade || base.riskLevel || base.grade || '-'
+  
+    const rawGender = d.gender ?? base.gender
+    const gender = rawGender === 'M' ? '남자' : rawGender === 'F' ? '여자' : rawGender || '-'
+  
+    const schedules = d.schedules || d.beneficiarySchedules || []
+  
+    const serviceTypeId =
+      pickServiceTypeId(d) ?? pickServiceTypeId(base) ?? pickServiceTypeId(schedules?.[0]) ?? null
+    const serviceTypeName =
+      pickServiceTypeName(d) ?? pickServiceTypeName(base) ?? pickServiceTypeName(schedules?.[0]) ?? ''
+  
+    const preferredFromSchedules = buildPreferredFromSchedules(schedules)
+  
+    const preferredTimes = d.preferredTimes || preferredFromSchedules.preferredTimes || base.preferredTimes || []
+    const preferredDays = d.preferredDays || preferredFromSchedules.preferredDays || base.preferredDays || []
+  
+    const needServices = d.serviceTypes || d.needServices || base.serviceTypes || base.needServices || []
+    const needTags = d.tags || d.needTags || base.tags || base.needTags || []
+    const riskFactors = d.riskFactors || d.riskTags || d.risks || base.riskFactors || base.risks || []
+  
+    return {
+      beneficiaryId: getBeneficiaryId(base),
+      name: d.name ?? base.name ?? '-',
+      grade,
+      gender,
+      address: d.address ?? base.address ?? '-',
+      phone: d.phone ?? base.phone ?? '',
+      needServices,
+      needTags,
+      riskFactors,
+      preferredDays,
+      preferredTimes,
+      schedules,
+      serviceTypeId,
+      serviceTypeName,
+      assignedCareWorker: d.assignedCareWorker || null,
+    }
+  })
+  
+  const selectAssignedCareWorker = () => {
+    const cw = viewModel.value.assignedCareWorker
+    if (!cw) return
+    store.setCaregiver(cw)
+    emit('assigned-careworker', cw)
+  }
+  
+  watch(
+    () => viewModel.value.assignedCareWorker,
+    async (cw) => {
+      if (!cw) {
+        careWorkerWorkingTimes.value = []
+        return
+      }
+      await loadCareWorkerWorkingTimes(cw)
+      emit('assigned-careworker', cw)
+    },
+    { immediate: true }
+  )
+  </script>
 
 <style scoped>
 .recipient-detail {
@@ -266,6 +512,7 @@ const viewModel = computed(() => {
   padding: 16px;
   color: #6b7280;
 }
+
 .error {
   padding: 16px;
   color: #b91c1c;
@@ -274,7 +521,6 @@ const viewModel = computed(() => {
   border: 1px solid #fecaca;
 }
 
-/* 상단 */
 .header-row {
   display: flex;
   gap: 16px;
@@ -332,7 +578,6 @@ const viewModel = computed(() => {
   color: #4b5563;
 }
 
-/* 중간 섹션 */
 .info-section {
   display: flex;
   gap: 40px;
@@ -366,27 +611,20 @@ const viewModel = computed(() => {
   font-size: 12px;
   margin-right: 6px;
   margin-bottom: 6px;
-}
-
-/* 기본(초록) */
-.pill {
   background: #dcfce7;
   color: #15803d;
 }
 
-/* 서비스(보라/인디고) */
 .pill-soft {
   background: #eef2ff;
   color: #4f46e5;
 }
 
-/* ✅ 위험요소(연한 주황/레드톤) */
 .pill-risk {
   background: #ffedd5;
   color: #c2410c;
 }
 
-/* ✅ 태그(민트/그린톤 살짝 다르게) */
 .pill-tag {
   background: #ecfeff;
   color: #0f766e;
@@ -425,7 +663,6 @@ const viewModel = computed(() => {
   object-fit: contain;
 }
 
-/* 하단 배정된 요양보호사 */
 .assigned-section {
   margin-top: 12px;
 }
@@ -455,6 +692,12 @@ const viewModel = computed(() => {
   border-radius: 14px;
   padding: 14px 18px;
   border: 1px solid #e5e7eb;
+  position: relative;
+  cursor: pointer;
+}
+
+.assigned-card:focus {
+  outline: none;
 }
 
 .assigned-left {
@@ -484,5 +727,173 @@ const viewModel = computed(() => {
 .assigned-meta {
   font-size: 13px;
   color: #6b7280;
+}
+
+.close-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.close-btn img {
+  width: 16px;
+  height: 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 18px 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.modal-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.modal-desc {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.modal .field {
+  margin: 10px 0 14px;
+}
+
+.modal .field .label {
+  margin-bottom: 6px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.modal-btn.cancel {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #e5e7eb;
+}
+
+.modal-btn.danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.modal-btn.primary {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.modal-btn.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.date-input {
+  display: block;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 14px;
+  color: #111827;
+  box-sizing: border-box;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.edit-schedule-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 12px;
+  color: #4f46e5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.edit-schedule-btn:hover {
+  background: #f3f4f6;
+}
+
+.schedule-modal {
+  width: 980px;
+  max-width: calc(100vw - 32px);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.schedule-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 12px;
+}
+
+.schedule-modal-body {
+  max-height: calc(100vh - 230px);
+  overflow: auto;
+}
+
+.schedule-actions {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #f3f4f6;
 }
 </style>

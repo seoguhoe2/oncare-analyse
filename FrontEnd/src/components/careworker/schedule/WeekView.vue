@@ -20,6 +20,22 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => i + 7); // 07:00 ~ 18:00
 
 const scheduleData = computed(() => props.schedules || []);
 
+// 시간을 분 단위로 변환
+const timeToMinutes = (time) => {
+  const [hour, min] = time.split(':').map(Number);
+  return hour * 60 + min;
+};
+
+// 두 일정이 시간적으로 겹치는지 확인
+const isOverlapping = (start1, end1, start2, end2) => {
+  const s1 = timeToMinutes(start1);
+  const e1 = timeToMinutes(end1);
+  const s2 = timeToMinutes(start2);
+  const e2 = timeToMinutes(end2);
+
+  return s1 < e2 && e1 > s2;
+};
+
 // 이번 주 날짜 7개 구하기 (월요일부터 일요일까지)
 const weekDates = computed(() => {
   const dates = [];
@@ -70,20 +86,53 @@ const getSchedulesForDate = (date) => {
   return scheduleData.value.filter(item => item.date === dateKey);
 };
 
-// 특정 날짜의 겹치는 일정 감지
-const getOverlappingSchedulesForDate = (date) => {
+// 특정 날짜의 겹치는 일정 그룹 찾기 (그래프 탐색)
+const getOverlappingGroupForDate = (date, currentSchedule) => {
   const dateSchedules = getSchedulesForDate(date);
-  const overlaps = {};
+  const group = new Set();
+  const toCheck = [currentSchedule];
 
-  dateSchedules.forEach((schedule, index) => {
-    const key = `${schedule.startTime}-${schedule.endTime}`;
-    if (!overlaps[key]) {
-      overlaps[key] = [];
+  while (toCheck.length > 0) {
+    const checking = toCheck.pop();
+    if (group.has(checking.id)) continue;
+
+    group.add(checking.id);
+
+    // 현재 일정과 겹치는 모든 일정 찾기
+    dateSchedules.forEach(schedule => {
+      if (!group.has(schedule.id) && isOverlapping(
+        checking.startTime,
+        checking.endTime,
+        schedule.startTime,
+        schedule.endTime
+      )) {
+        toCheck.push(schedule);
+      }
+    });
+  }
+
+  // 그룹에 속한 일정들을 시작 시간 순으로 정렬
+  const groupSchedules = dateSchedules.filter(s => group.has(s.id));
+
+  return groupSchedules.sort((a, b) => {
+    const startA = timeToMinutes(a.startTime);
+    const startB = timeToMinutes(b.startTime);
+
+    if (startA !== startB) {
+      return startA - startB;
     }
-    overlaps[key].push({ schedule, index });
-  });
 
-  return overlaps;
+    const endA = timeToMinutes(a.endTime);
+    const endB = timeToMinutes(b.endTime);
+
+    if (endA !== endB) {
+      return endA - endB;
+    }
+
+    const idA = typeof a.id === 'string' ? a.id : String(a.id);
+    const idB = typeof b.id === 'string' ? b.id : String(b.id);
+    return idA.localeCompare(idB);
+  });
 };
 
 // 위치 계산 (시작/끝) + 겹치는 일정 처리
@@ -98,19 +147,30 @@ const getPositionStyle = (date, start, end, scheduleId) => {
   // 연속된 일정이 겹치지 않도록 하단에 4px 여백 추가
   const height = heightRaw - 4;
 
-  // 같은 시간대의 일정들 찾기
-  const key = `${start}-${end}`;
-  const overlaps = getOverlappingSchedulesForDate(date);
-  const sameTimeSchedules = overlaps[key] || [];
+  // 현재 일정 찾기
+  const dateSchedules = getSchedulesForDate(date);
+  const currentSchedule = dateSchedules.find(s => s.id === scheduleId);
 
-  // 현재 일정이 몇 번째인지 찾기
-  const currentIndex = sameTimeSchedules.findIndex(item => item.schedule.id === scheduleId);
-  const totalCount = sameTimeSchedules.length;
+  if (!currentSchedule) {
+    return {
+      top: `${top}px`,
+      height: `${height}px`,
+      width: '95%',
+      left: '0',
+    };
+  }
+
+  // 겹치는 일정들 찾기 (그래프 탐색으로 연결된 모든 일정 포함)
+  const overlappingSchedules = getOverlappingGroupForDate(date, currentSchedule);
+  const totalCount = overlappingSchedules.length;
+
+  // 현재 일정의 인덱스 찾기
+  const currentIndex = overlappingSchedules.findIndex(s => s.id === scheduleId);
 
   // 겹치는 일정이 있으면 너비를 나누고 위치 조정
   if (totalCount > 1) {
-    const widthPercent = 95 / totalCount;
-    const leftPercent = (widthPercent * currentIndex);
+    const widthPercent = 100 / totalCount; // 전체를 균등 분할
+    const leftPercent = widthPercent * currentIndex;
 
     return {
       top: `${top}px`,
@@ -123,7 +183,7 @@ const getPositionStyle = (date, start, end, scheduleId) => {
   return {
     top: `${top}px`,
     height: `${height}px`,
-    width: '95%',
+    width: '100%',
     left: '0',
   };
 };
@@ -247,10 +307,13 @@ const openAdd = () => {
 .schedule-block {
   position: absolute; left: 2px; right: 2px; padding: 4px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; overflow: hidden;
 }
+/* 일정 색상 클래스 (상태별) */
+.bg-blue { background: #dbeafe; border-left: 3px solid #3b82f6; color: #1e3a8a; }         /* 예정 */
+.bg-green { background: #dcfce7; border-left: 3px solid #22c55e; color: #166534; }        /* 진행중 */
+.bg-red { background: #fee2e2; border-left: 3px solid #ef4444; color: #991b1b; }          /* 완료 */
+.bg-purple { background: #f3e8ff; border-left: 3px solid #9333ea; color: #6b21a8; }       /* 개인일정 */
+.bg-gray { background: #f3f4f6; border-left: 3px solid #9ca3af; color: #6b7280; }         /* 취소 */
 .bg-yellow { background: #fefce8; border-left: 3px solid #eab308; color: #854d0e; }
-.bg-green { background: #dcfce7; border-left: 3px solid #22c55e; color: #166534; }
-.bg-blue { background: #dbeafe; border-left: 3px solid #3b82f6; color: #1e3a8a; }
-.bg-purple { background: #f3e8ff; border-left: 3px solid #9333ea; color: #6b21a8; }
 
 .block-title { font-weight: 700; }
 .block-time { font-size: 0.75rem; }

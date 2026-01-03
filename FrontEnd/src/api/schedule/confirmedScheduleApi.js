@@ -25,6 +25,8 @@ export const getConfirmedScheduleRangeCounts = async ({
 
 export const getConfirmedScheduleDayList = async ({
   date,
+  page = 0,
+  size = 5,
   beneficiaryId,
   careWorkerId,
   serviceTypeId,
@@ -33,6 +35,8 @@ export const getConfirmedScheduleDayList = async ({
 } = {}) => {
   const params = {
     date,
+    page,
+    size,
     ...(beneficiaryId != null ? { beneficiaryId } : {}),
     ...(careWorkerId != null ? { careWorkerId } : {}),
     ...(serviceTypeId != null ? { serviceTypeId } : {}),

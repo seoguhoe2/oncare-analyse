@@ -1,35 +1,62 @@
 <!-- src/components/recipient/main/category/Inquiry.vue -->
 <template>
-  <div class="list-column">
+  <div class="list-column scroll-wrapper">
+    <!-- ✅ 상단: 총 건수만 -->
+    <div class="top-bar">
+      <div class="total">총 {{ totalCount }}건</div>
+    </div>
+
     <!-- 로딩/빈상태 -->
     <div v-if="loading" class="empty">불러오는 중...</div>
-    <div v-else-if="!inquiryList.length" class="empty">문의 이력이 없습니다.</div>
+    <div v-else-if="!totalCount" class="empty">문의 이력이 없습니다.</div>
 
-    <!-- 목록 -->
+    <!-- ✅ 목록(현재 페이지 10개만) -->
     <div
       v-else
-      v-for="item in inquiryList"
+      v-for="item in pagedInquiryList"
       :key="item.counselHistoryId"
       class="list-card compact"
       @click="openModal(item.counselHistoryId)"
     >
       <div class="list-header-row">
-        <!-- ✅ 전화문의 등: categoryName -->
         <span class="badge-type type-phone">
           {{ item.categoryName }}
         </span>
 
-        <!-- ✅ 날짜만 표시(시간 제거): consultDate -->
         <span class="list-date">{{ item.consultDate }}</span>
       </div>
 
-      <!-- ✅ 내용: detail -->
       <p v-if="item.detail" class="list-text">
         {{ item.detail }}
       </p>
     </div>
 
-    <!-- ✅ 문의 이력 모달: id만 넘김 -->
+    <!-- ✅ 하단 중앙 페이징 (페이지가 2 이상일 때만 표시) -->
+    <div v-if="totalPages > 1" class="bottom-pager">
+      <button
+        type="button"
+        class="page-btn"
+        :disabled="loading || page <= 0"
+        @click="page--"
+      >
+        이전
+      </button>
+
+      <span class="page-info">
+        {{ page + 1 }} / {{ totalPages }}
+      </span>
+
+      <button
+        type="button"
+        class="page-btn"
+        :disabled="loading || page >= totalPages - 1"
+        @click="page++"
+      >
+        다음
+      </button>
+    </div>
+
+    <!-- 문의 이력 모달: id만 넘김 -->
     <InquiryModal
       v-model="showModal"
       :beneficiary-id="beneficiaryId"
@@ -39,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import api from '@/lib/api'
 import InquiryModal from './modal/InquiryModal.vue'
 
@@ -57,7 +84,23 @@ const inquiryList = ref([])
 const showModal = ref(false)
 const selectedCounselHistoryId = ref(null)
 
-// ✅ 목록 조회 API만
+/** ✅ 페이징 상태 */
+const page = ref(0)
+const pageSize = ref(10)
+
+/** ✅ 총 건수/총 페이지 */
+const totalCount = computed(() => inquiryList.value.length)
+const totalPages = computed(() =>
+  totalCount.value === 0 ? 0 : Math.ceil(totalCount.value / pageSize.value)
+)
+
+/** ✅ 현재 페이지에 보여줄 10개 */
+const pagedInquiryList = computed(() => {
+  const start = page.value * pageSize.value
+  return inquiryList.value.slice(start, start + pageSize.value)
+})
+
+// 목록 조회 API
 const fetchInquiryList = async () => {
   if (!props.beneficiaryId) return
   loading.value = true
@@ -67,9 +110,15 @@ const fetchInquiryList = async () => {
       `/api/beneficiaries/${props.beneficiaryId}/counsel-histories`
     )
     inquiryList.value = data?.items ?? []
+
+    // ✅ 목록 로드 후 현재 page가 범위를 벗어나면 보정
+    if (page.value > 0 && page.value >= totalPages.value) {
+      page.value = Math.max(totalPages.value - 1, 0)
+    }
   } catch (e) {
     console.error('문의이력 목록 조회 실패:', e)
     inquiryList.value = []
+    page.value = 0
   } finally {
     loading.value = false
   }
@@ -83,17 +132,16 @@ const openModal = (counselHistoryId) => {
 onMounted(fetchInquiryList)
 watch(() => props.beneficiaryId, fetchInquiryList)
 
-// beneficiaryId 변경 시 목록 재조회 + 모달 닫기
+// beneficiaryId/refreshKey 변경 시 목록 재조회 + 모달 닫기 + ✅ 페이지 초기화
 watch(
   () => [props.beneficiaryId, props.refreshKey],
   () => {
     inquiryList.value = []
     showModal.value = false
     selectedCounselHistoryId.value = null
+    page.value = 0
     fetchInquiryList()
   }
-  // },
-  // { immediate: true }
 )
 </script>
 
@@ -102,6 +150,58 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* ✅ 상단 바(총 건수만) */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 2px 6px;
+}
+
+.total {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* ✅ 하단 중앙 페이징 */
+.bottom-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 6px 0;
+}
+
+.page-info {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.page-btn {
+  border: none;
+  background: #f3f4f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.page-btn:hover {
+  background: #e5e7eb;
+}
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 스크롤바 추가 (목록이 길어지면 이 영역 안에서만 스크롤) */
+.scroll-wrapper {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .list-card {
@@ -139,7 +239,6 @@ watch(
   font-size: 11px;
 }
 
-/* ✅ 색상은 기존 phone 스타일을 재사용 */
 .type-phone {
   background-color: #dcfce7;
   color: #15803d;

@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.command.dto.CreateCounselingLogRequest;
 import org.ateam.oncare.careworker.command.dto.UpdateCounselingLogRequest;
 import org.ateam.oncare.careworker.command.service.CounselingLogCommandService;
 import org.ateam.oncare.careworker.query.dto.ApiResponse;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,9 +19,9 @@ public class CounselingLogCommandController {
     // 1. 방문상담 작성
     @PostMapping
     public ApiResponse<Void> createCounselingLog(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId,
+            @AuthenticationPrincipal EmployeeImpl employee,
             @RequestBody CreateCounselingLogRequest request) {
-        counselingLogCommandService.createCounselingLog(careWorkerId, request);
+        counselingLogCommandService.createCounselingLog(employee.getId(), request);
         return ApiResponse.success(null);
     }
 

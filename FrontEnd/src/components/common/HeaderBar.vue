@@ -40,6 +40,7 @@
           :isOpen="isNotificationOpen" 
           :notifications="notifications" 
           @read="handleRead" 
+          @mark-read="handleMarkRead"
           @click-item="handleItemClick"
           @view-all="goToAllNotifications" 
         />
@@ -140,6 +141,22 @@ const handleRead = async (alarm) => {
         
     } catch (e) {
         console.error("알림 삭제 처리 실패:", e);
+    }
+}
+
+// [추가] 읽음 처리만 하고 리스트 유지 (클릭 시)
+const handleMarkRead = async (alarm) => {
+    try {
+        if (alarm.status === 'SENT') {
+            await markAsRead(alarm.alarmId);
+            if (unreadCountVal.value > 0) unreadCountVal.value--;
+            
+            // 상태 업데이트 (리스트 유지)
+            const target = notifications.value.find(n => n.alarmId === alarm.alarmId);
+            if (target) target.status = 'READ';
+        }
+    } catch (e) {
+        console.error("읽음 처리 실패:", e);
     }
 }
 
@@ -273,7 +290,7 @@ onUnmounted(() => {
   // 역할별 메뉴
   const menuList = computed(() => {
     console.log("currentRole.value::", currentRole.value);
-    return MENU_CONFIG[currentRole.value[0]] || MENU_CONFIG.ROLE_CENTER_MANAGER
+    return MENU_CONFIG[currentRole.value[0]] || MENU_CONFIG.ROLE_CAREGIVER
   })
   
   // 현재 라우트 기준 활성 메뉴

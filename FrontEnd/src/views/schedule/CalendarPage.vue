@@ -12,7 +12,9 @@
         <Calendar
           :keyword="keyword"
           :search-scope="searchScope"
+          :service-type-id="serviceTypeId"
           :refresh-key="refreshKey"
+          @update:serviceTypeId="serviceTypeId = $event"
           @select-date="onSelectDate"
         />
 
@@ -20,6 +22,7 @@
           :selected-date="selectedDate"
           :keyword="keyword"
           :search-scope="searchScope"
+          :service-type-id="serviceTypeId"
           :refresh-key="refreshKey"
           @select-schedule="onSelectSchedule"
         />
@@ -53,11 +56,12 @@ const formatDateKey = (date) => {
 const keyword = ref('');
 const searchScope = ref('ALL');
 
+const serviceTypeId = ref(null); // null | 1 | 2 | 3
+
 const selectedDate = ref(formatDateKey(new Date()));
 const selectedSchedule = ref(null);
 
 const refreshKey = ref(0);
-
 const refreshAll = () => {
   refreshKey.value += 1;
 };

@@ -5,23 +5,17 @@
     </div>
     
     <div class="detail-body">
-      <div class="history-box">
-        <div class="sub-title">이전 상담 이력</div>
-        <div class="history-content">
-          <div class="history-top">
-            <span class="history-badge">가입 상담</span>
-            <span class="history-date">2025.01.02</span>
-          </div>
-          <div class="history-manager">담당자: 김상담</div>
-          <p class="history-desc">
-            방문 요양 상담 - 장기 요양 등급 관련 상담 진행, 방문 요양 서비스 신청 희망하심
-          </p>
-        </div>
+      <div v-if="customer?.customerType === 'potential'">
+        <SubscriptProcess 
+        :customer="customer" />
       </div>
-      <MatchingHelpForm v-if="category === 'subscript'"/>
-      <RentalInfoForm v-if="category === 'rental'" />
-
-      <ComplainResolutionHelp v-if="category === 'complain'" />
+      <div v-if="counselDetail" class="selected-detail">
+        <CounselDetailCard v-bind="counselDetail" />
+      </div>
+      
+      <MatchingHelpForm v-if="category === '가입상담'" />
+      <RentalInfoForm v-else-if="category === '렌탈상담'" />
+      <ComplainResolutionHelp v-else-if="category === '컴플레인'" />
       
       
       
@@ -37,10 +31,17 @@
 import RentalInfoForm from '@/components/inquiry/Counsel/HelpDetail/RentalInfoForm.vue';
 import MatchingHelpForm from '@/components/inquiry/Counsel/HelpDetail/MatchingHelpForm.vue';
 import ComplainResolutionHelp from '@/components/inquiry/Counsel/HelpDetail/ComplainResolutionHelp.vue';
+import CounselDetailCard from '@/components/inquiry/Counsel/CounselDetailCard.vue';
+import SubscriptProcess from '@/components/inquiry/Counsel/Process/SubscriptProcess.vue';
 defineProps({
   category: {
     type: String,
     default: ''
+  },
+  counselDetail: { type: Object, default: null },
+  customer: {
+    type: Object,
+    default: null
   }
 });
 </script>
@@ -62,4 +63,8 @@ defineProps({
 .history-desc { font-size: 14px; color: #4A5565; line-height: 1.5; margin: 0; }
 
 .empty-guide { text-align: center; color: #999; padding: 40px 0; font-size: 14px; }
+.selected-detail {
+  border-radius: 10px;
+  overflow: hidden;
+}
 </style>

@@ -1,0 +1,32 @@
+export const productManageDetailMock = [
+    {
+      id: 1,
+      productCode: 'EM002',
+      managementCode: 'MG001-001',
+      purchaseDate: '2024-01-15',
+      status: '임대중',
+      location: '김영희',
+      income: 350000,
+      asCount: 2,
+    },
+    {
+      id: 2,
+      productCode: 'EM002',
+      managementCode: 'MG001-002',
+      purchaseDate: '2024-02-10',
+      status: '임대중',
+      location: '이철수',
+      income: 350000,
+      asCount: 0,
+    },
+    {
+      id: 3,
+      productCode: 'EM002',
+      managementCode: 'MG001-003',
+      purchaseDate: '2024-03-05',
+      status: '보관중',
+      location: '본사 창고',
+      income: 0,
+      asCount: 0,
+    },
+  ]

@@ -2,7 +2,7 @@
   <section class="matching-panel">
     <header class="panel-header">
       <h2 class="panel-title">요양보호사</h2>
-      <span class="count-badge">{{ caregivers.length }}명</span>
+      <span class="count-badge">{{ total }}명</span>
     </header>
 
     <div class="search-bar">
@@ -38,7 +38,7 @@
             </td>
           </tr>
 
-          <tr v-if="!pagedList.length">
+          <tr v-if="!pagedList.length && !loading">
             <td colspan="3" class="dash">표시할 요양보호사가 없습니다.</td>
           </tr>
         </tbody>
@@ -48,147 +48,214 @@
     <div class="pagination">
       <button @click="prevPage" :disabled="page === 1">〈</button>
       <span>{{ page }} / {{ totalPages }}</span>
-      <button @click="nextPage" :disabled="page === totalPages">〉</button>
+      <button @click="nextPage" :disabled="page >= totalPages">〉</button>
     </div>
   </section>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import searchIcon from '@/assets/img/common/search.png'
-import {
-  getCandidateCareWorkerCards,
-  getCreateVisitAvailableCareWorkerCards,
-} from '@/api/schedule/matching.js'
-
-const props = defineProps({
-  recipient: { type: Object, default: null },
-  startDt: { type: String, default: '' },
-  endDt: { type: String, default: '' },
-  // ✅ 추가: 드롭다운에서 선택한 서비스 타입
-  serviceTypeId: { type: Number, default: null },
-})
-
-const emit = defineEmits(['select-caregiver'])
-
-const search = ref('')
-const page = ref(1)
-const pageSize = 10
-
-const loading = ref(false)
-const error = ref('')
-const caregiversRaw = ref([])
-
-const selectedCareWorkerId = ref(null)
-
-const getBeneficiaryId = (obj) => obj?.beneficiaryId ?? obj?.id ?? null
-const beneficiaryId = computed(() => getBeneficiaryId(props.recipient))
-
-// ✅ 생성모드: start/end가 있으면 생성 흐름
-const isCreateVisitMode = computed(() => Boolean(props.startDt && props.endDt))
-
-const loadCareWorkers = async () => {
-  if (!beneficiaryId.value) {
-    caregiversRaw.value = []
-    error.value = ''
-    return
-  }
-
-  // ✅ 생성모드에서는 서비스타입도 필수(드롭다운 선택 전엔 빈 목록)
-  if (isCreateVisitMode.value && (!props.startDt || !props.endDt || !props.serviceTypeId)) {
-    caregiversRaw.value = []
-    error.value = ''
-    return
-  }
-
-  try {
-    loading.value = true
-    error.value = ''
-
-    const res = isCreateVisitMode.value
-      ? await getCreateVisitAvailableCareWorkerCards({
-          beneficiaryId: beneficiaryId.value,
-          startDt: props.startDt,
-          endDt: props.endDt,
-          // ✅ 추가: 백엔드에서 이 값으로 서비스 타입 필터
-          serviceTypeId: props.serviceTypeId,
-        })
-      : await getCandidateCareWorkerCards(beneficiaryId.value)
-
-    const list = Array.isArray(res?.data) ? res.data : []
-
-    caregiversRaw.value = list.map((c) => ({
-      careWorkerId: c?.careWorkerId ?? c?.id ?? null,
+  import { ref, computed, watch } from 'vue'
+  import searchIcon from '@/assets/img/common/search.png'
+  import {
+    getCandidateCareWorkerCards,
+    getCreateVisitAvailableCareWorkerCards,
+  } from '@/api/schedule/matching.js'
+  import { useMatchingSelectionStore } from '@/stores/matchingSelection'
+  
+  const props = defineProps({
+    recipient: { type: Object, default: null },
+    startDt: { type: String, default: '' },
+    endDt: { type: String, default: '' },
+    serviceTypeId: { type: Number, default: null },
+    refreshKey: { type: Number, default: 0 },
+  })
+  
+  const emit = defineEmits(['select-caregiver'])
+  const store = useMatchingSelectionStore()
+  
+  const search = ref('')
+  const page = ref(1)
+  const pageSize = 8
+  
+  const loading = ref(false)
+  const error = ref('')
+  const caregiversRaw = ref([])
+  const total = ref(0)
+  
+  const selectedCareWorkerId = ref(null)
+  const autoPickedKey = ref('')
+  
+  const getCareWorkerId = (obj) => obj?.careWorkerId ?? obj?.id ?? null
+  const getBeneficiaryId = (obj) => obj?.beneficiaryId ?? obj?.id ?? null
+  
+  const beneficiaryId = computed(() => getBeneficiaryId(props.recipient))
+  
+  const isCreateVisitMode = computed(() => Boolean(props.startDt && props.endDt && props.serviceTypeId))
+  
+  const normalizeList = (list) =>
+    (Array.isArray(list) ? list : []).map((c) => ({
+      careWorkerId: getCareWorkerId(c),
       name: c?.name ?? '-',
       gender: c?.gender ?? '-',
       tags: Array.isArray(c?.tags) ? c.tags : [],
     }))
-  } catch (e) {
-    caregiversRaw.value = []
-    error.value =
-      e?.response?.data?.message || '요양보호사 목록을 불러오지 못했습니다.'
-  } finally {
-    loading.value = false
+  
+  const pickPage = (resData) => {
+    if (resData && Array.isArray(resData.content)) {
+      return {
+        content: normalizeList(resData.content),
+        total: Number.isFinite(resData.total) ? resData.total : resData.content.length,
+      }
+    }
+    if (Array.isArray(resData)) {
+      const list = normalizeList(resData)
+      return { content: list, total: list.length }
+    }
+    if (resData && Array.isArray(resData.data)) {
+      const list = normalizeList(resData.data)
+      return { content: list, total: list.length }
+    }
+    return { content: [], total: 0 }
   }
-}
-
-// ✅ serviceTypeId 변경에도 다시 로드
-watch(
-  () => [beneficiaryId.value, props.startDt, props.endDt, props.serviceTypeId, isCreateVisitMode.value],
-  () => {
-    page.value = 1
-    search.value = ''
-    selectedCareWorkerId.value = null
-    loadCareWorkers()
-  },
-  { immediate: true }
-)
-
-watch(search, () => {
-  page.value = 1
-})
-
-const caregivers = computed(() => {
-  const q = search.value.toLowerCase().trim()
-  if (!q) return caregiversRaw.value
-
-  return caregiversRaw.value.filter((c) =>
-    [c.name, c.gender, ...(c.tags || [])].some((f) =>
-      String(f ?? '').toLowerCase().includes(q)
-    )
+  
+  const loadCareWorkers = async () => {
+    if (!beneficiaryId.value) {
+      caregiversRaw.value = []
+      total.value = 0
+      error.value = ''
+      selectedCareWorkerId.value = null
+      return
+    }
+  
+    try {
+      loading.value = true
+      error.value = ''
+  
+      const keyword = search.value?.trim() || null
+  
+      const res = isCreateVisitMode.value
+        ? await getCreateVisitAvailableCareWorkerCards({
+            beneficiaryId: beneficiaryId.value,
+            startDt: props.startDt,
+            endDt: props.endDt,
+            serviceTypeId: props.serviceTypeId,
+            page: page.value - 1,
+            size: pageSize,
+            keyword,
+          })
+        : await getCandidateCareWorkerCards({
+            beneficiaryId: beneficiaryId.value,
+            page: page.value - 1,
+            size: pageSize,
+            keyword,
+          })
+  
+      const { content, total: t } = pickPage(res?.data)
+      caregiversRaw.value = content
+      total.value = t
+  
+      const assigned = props.recipient?.assignedCareWorker
+      const assignedId = getCareWorkerId(assigned)
+  
+      if (assignedId) {
+        selectedCareWorkerId.value = assignedId
+        emit('select-caregiver', assigned)
+        return
+      }
+  
+      const storeId = store.caregiverId
+      if (storeId) {
+        const found = content.find((c) => c.careWorkerId === storeId)
+        if (found) {
+          selectedCareWorkerId.value = storeId
+          emit('select-caregiver', found)
+          return
+        }
+      }
+  
+      const key = `${beneficiaryId.value}-${props.startDt || ''}-${props.endDt || ''}-${props.serviceTypeId || ''}`
+      if (autoPickedKey.value !== key) {
+        autoPickedKey.value = key
+        const first = content[0] || null
+        if (first) {
+          selectedCareWorkerId.value = first.careWorkerId
+          emit('select-caregiver', first)
+        } else {
+          selectedCareWorkerId.value = null
+        }
+      }
+    } catch (e) {
+      caregiversRaw.value = []
+      total.value = 0
+      error.value = e?.response?.data?.message || '요양보호사 목록을 불러오지 못했습니다.'
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  watch(
+    () => [beneficiaryId.value, props.startDt, props.endDt, props.serviceTypeId],
+    () => {
+      page.value = 1
+      search.value = ''
+      autoPickedKey.value = ''
+      loadCareWorkers()
+    },
+    { immediate: true }
   )
-})
-
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(caregivers.value.length / pageSize))
-)
-
-const pagedList = computed(() =>
-  caregivers.value.slice((page.value - 1) * pageSize, page.value * pageSize)
-)
-
-const prevPage = () => {
-  if (page.value > 1) page.value--
-}
-const nextPage = () => {
-  if (page.value < totalPages.value) page.value++
-}
-
-const handleSelect = (item) => {
-  const careWorkerId = item?.careWorkerId ?? item?.id ?? null
-  selectedCareWorkerId.value = careWorkerId
-  emit('select-caregiver', { ...item, careWorkerId })
-}
-
-const badgeClass = (gender) => ({
-  badge: true,
-  male: gender === '남자',
-  female: gender === '여자',
-})
-</script>
+  
+  watch(search, () => {
+    page.value = 1
+    loadCareWorkers()
+  })
+  
+  watch(page, () => {
+    loadCareWorkers()
+  })
+  
+  watch(
+    () => props.refreshKey,
+    () => {
+      autoPickedKey.value = ''
+      loadCareWorkers()
+    }
+  )
+  
+  watch(
+    () => store.caregiverId,
+    (id) => {
+      selectedCareWorkerId.value = id
+    },
+    { immediate: true }
+  )
+  
+  const pagedList = computed(() => caregiversRaw.value)
+  
+  const totalPages = computed(() => Math.max(1, Math.ceil((total.value || 0) / pageSize)))
+  
+  const prevPage = () => {
+    if (page.value > 1) page.value--
+  }
+  
+  const nextPage = () => {
+    if (page.value < totalPages.value) page.value++
+  }
+  
+  const handleSelect = (item) => {
+    const careWorkerId = getCareWorkerId(item)
+    selectedCareWorkerId.value = careWorkerId
+    emit('select-caregiver', item)
+  }
+  
+  const badgeClass = (gender) => ({
+    badge: true,
+    male: gender === '남자',
+    female: gender === '여자',
+  })
+  </script>
+  
 
 <style scoped>
-/* ✅ 스타일은 그대로 사용하셔도 됩니다 */
 .matching-panel {
   background: #ffffff;
   border-radius: 16px;
@@ -248,17 +315,9 @@ const badgeClass = (gender) => ({
 
 .table-scroll {
   flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
-  max-height: 320px;
-}
-
-.table-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.table-scroll::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 8px;
+  overflow: visible;
+  padding-right: 0;
+  max-height: none;
 }
 
 .list-table {

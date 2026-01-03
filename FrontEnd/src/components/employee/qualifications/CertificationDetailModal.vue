@@ -1,6 +1,6 @@
 <!-- 자격증 상세 모달 -->
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { defineProps, defineEmits, computed, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -8,6 +8,23 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+
+// 키보드 이벤트 핸들러
+const handleKeydown = (e) => {
+  if (!props.isOpen) return;
+
+  if (e.key === 'Escape' || e.key === 'Enter') {
+    emit('close');
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 
 const certificateInfo = computed(() => ({
   name: props.data?.certificateName || props.data?.name || '-',
@@ -85,22 +102,7 @@ const statusInfo = computed(() => getStatusInfo(props.data?.status));
           </div>
         </div>
 
-        <div class="file-box">
-          <span class="label mb-2 block">첨부파일</span>
-          <div v-if="certificateInfo.fileName" class="file-row">
-            <div class="file-name">
-              <svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-              {{ certificateInfo.fileName }}
-            </div>
-            <button class="btn-download" type="button">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              다운로드
-            </button>
-          </div>
-          <div v-else class="empty-file">
-            등록된 첨부파일이 없습니다.
-          </div>
-        </div>
+
       </div>
 
       <div class="modal-footer">

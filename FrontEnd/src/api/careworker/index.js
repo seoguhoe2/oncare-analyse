@@ -36,6 +36,9 @@ export {
 
 // Care Log API
 export {
+  getCareLogList,
+  getCareLogListByBeneficiary,
+  getCareLogDetail,
   createCareLog,
   updateCareLog,
   deleteCareLog,
@@ -68,15 +71,27 @@ export {
 
 // Evaluation API (욕창, 인지기능, 낙상, 욕구사정)
 export {
+  getBedsoreEvaluationList,
+  getBedsoreEvaluationListByBeneficiary,
+  getBedsoreEvaluationDetail,
   createBedsoreEvaluation,
   updateBedsoreEvaluation,
   deleteBedsoreEvaluation,
+  getCognitiveEvaluationList,
+  getCognitiveEvaluationListByBeneficiary,
+  getCognitiveEvaluationDetail,
   createCognitiveEvaluation,
   updateCognitiveEvaluation,
   deleteCognitiveEvaluation,
+  getFallEvaluationList,
+  getFallEvaluationListByBeneficiary,
+  getFallEvaluationDetail,
   createFallEvaluation,
   updateFallEvaluation,
   deleteFallEvaluation,
+  getNeedsEvaluationList,
+  getNeedsEvaluationListByBeneficiary,
+  getNeedsEvaluationDetail,
   createNeedsEvaluation,
   updateNeedsEvaluation,
   deleteNeedsEvaluation,
@@ -84,6 +99,9 @@ export {
 
 // Counseling Log API
 export {
+  getCounselingLogList,
+  getCounselingLogListByBeneficiary,
+  getCounselingLogDetail,
   createCounselingLog,
   updateCounselingLog,
   deleteCounselingLog,

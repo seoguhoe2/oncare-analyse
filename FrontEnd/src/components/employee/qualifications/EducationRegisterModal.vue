@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -8,23 +8,47 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit']);
 
+// 키보드 이벤트 핸들러
+const handleKeydown = (e) => {
+  if (!props.isOpen) return;
+
+  if (e.key === 'Escape') {
+    emit('close');
+  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    // Ctrl+Enter 또는 Cmd+Enter로 제출
+    handleSubmit();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+
 const initialForm = {
   targetCertIndex: null,
   eduName: '',
   institution: '',
   eduDate: '',
   nextEduDate: '',
-  isOverdue: false,
-  status: 0
+  isOverdue: false
 };
 
 const form = ref({ ...initialForm });
+
+// 오늘 날짜를 'YYYY-MM-DD' 형식으로 구하기
+const today = computed(() => {
+  return new Date().toISOString().split('T')[0];
+});
 
 // 모달이 열릴 때 초기화
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     form.value = { ...initialForm };
-    
+
     // 자격증이 하나뿐이고, 그 자격증에 ID가 있다면 자동 선택
     if (props.certificates.length === 1) {
       const cert = props.certificates[0];
@@ -57,16 +81,22 @@ const handleSubmit = () => {
     alert('교육을 등록할 자격증을 선택해주세요.');
     return;
   }
-  
+
   // 필수 정보 확인
   if (!form.value.eduName || !form.value.institution || !form.value.eduDate) {
     alert('필수 정보를 입력해주세요.');
     return;
   }
 
+  // 날짜 검증 - 이수일이 미래인지 체크
+  if (form.value.eduDate > today.value) {
+    alert('보수교육 이수일은 미래일 수 없습니다.');
+    return;
+  }
+
   // 선택된 자격증에서 진짜 ID 추출
   const selectedCert = props.certificates[form.value.targetCertIndex];
-  
+
   const realId = selectedCert.certificateId || selectedCert.id;
 
   // ID가 없으면 중단 (DB 저장 불가)
@@ -78,10 +108,10 @@ const handleSubmit = () => {
 
   // 전송 (ID와 폼 데이터)
   const { targetCertIndex, ...payload } = form.value;
-  
-  emit('submit', { 
-    targetCertId: realId, 
-    ...payload 
+
+  emit('submit', {
+    targetCertId: realId,
+    ...payload
   });
 };
 </script>
@@ -128,21 +158,16 @@ const handleSubmit = () => {
           <div class="grid-2">
             <div>
               <label class="block-label">이수일 <span class="text-red">*</span></label>
-              <input v-model="form.eduDate" type="date" class="input" />
+              <input
+                v-model="form.eduDate"
+                type="date"
+                class="input"
+                :max="today"
+              />
             </div>
             <div>
               <label class="block-label">다음 교육 예정일</label>
               <input v-model="form.nextEduDate" type="date" class="input" />
-            </div>
-          </div>
-           <div class="grid-2">
-            <div>
-              <label class="block-label">상태</label>
-              <select v-model="form.status" class="input">
-                <option :value="0">이수 완료</option>
-                <option :value="1">미이수</option>
-                <option :value="2">예정</option>
-              </select>
             </div>
           </div>
         </form>

@@ -228,11 +228,13 @@ const openAdd = () => {
 .schedule-item:hover { opacity: 0.8; }
 .time { font-weight: 600; }
 
-/* 일정 색상 클래스 (mock 데이터 기반) */
+/* 일정 색상 클래스 (상태별) */
+.bg-blue { background-color: #dbeafe; color: #1e40af; border-left: 3px solid #3b82f6; }      /* 예정 */
+.bg-green { background-color: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }     /* 진행중 */
+.bg-red { background-color: #fee2e2; color: #991b1b; border-left: 3px solid #ef4444; }       /* 완료 */
+.bg-purple { background-color: #f3e8ff; color: #6b21a8; border-left: 3px solid #9333ea; }    /* 개인일정 */
+.bg-gray { background-color: #f3f4f6; color: #6b7280; border-left: 3px solid #9ca3af; }      /* 취소 */
 .bg-yellow { background-color: #fef9c3; color: #854d0e; border-left: 3px solid #eab308; }
-.bg-blue { background-color: #dbeafe; color: #1e40af; border-left: 3px solid #3b82f6; }
-.bg-green { background-color: #dcfce7; color: #166534; border-left: 3px solid #22c55e; }
-.bg-purple { background-color: #f3e8ff; color: #6b21a8; border-left: 3px solid #9333ea; }
 
 /* 반응형: 모바일에서는 높이/폰트 축소 */
 @media (max-width: 768px) {

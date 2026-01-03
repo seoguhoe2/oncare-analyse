@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS contract;
 DROP TABLE IF EXISTS m_form_category;
 DROP TABLE IF EXISTS m_care_level;
 DROP TABLE IF EXISTS beneficiary;
+DROP TABLE IF EXISTS beneficiary_history;
 
 -- 요양사
 DROP TABLE IF EXISTS care_logs;
@@ -49,6 +50,7 @@ DROP TABLE IF EXISTS certificate;
 DROP TABLE IF EXISTS employee_career;
 DROP TABLE IF EXISTS employee_form;
 DROP TABLE IF EXISTS employee_form_category;
+DROP TABLE IF EXISTS dashboard_settings;
 
 -- 알람
 DROP TABLE IF EXISTS notification_log;
@@ -92,6 +94,8 @@ DROP TABLE IF EXISTS m_reservation_channel;
 DROP TABLE IF EXISTS m_counsel_category;
 DROP TABLE IF EXISTS refresh_token;
 DROP TABLE IF EXISTS certificate_status;
+
+DROP TABLE IF EXISTS counsel_history;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -147,10 +151,9 @@ CREATE TABLE electronic_payment_category
 (
     id   INT         NOT NULL AUTO_INCREMENT,
     name VARCHAR(50) NOT NULL COMMENT '전자결재유형이름 (급여, 구매 등)',
+
     CONSTRAINT pk_electronic_payment_category_id PRIMARY KEY (id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
 
 CREATE TABLE employee
 (
@@ -160,16 +163,22 @@ CREATE TABLE employee
     birth            DATE,
     gender           VARCHAR(1)   NOT NULL,
     address          VARCHAR(500) NOT NULL,
-    email            VARCHAR(50),
+    email            VARCHAR(50)  NOT NULL,
     phone            VARCHAR(14)  NOT NULL,
     emergency_number VARCHAR(14),
-    hire_date        DATE,
+    hire_date        DATE         NOT NULL,
     end_date         DATE,
     dept_code        INT,
     job_code         INT          NOT NULL,
     manager_id       INT,
     status_id        INT          NOT NULL,
-    CONSTRAINT pk_employee_id PRIMARY KEY (id)
+    lat              DECIMAL(10,7) NULL,
+    lng              DECIMAL(10,7) NULL,
+    geo_ready        TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '좌표 준비 완료 여부(0:미완료,1:완료)',
+
+    CONSTRAINT pk_employee_id PRIMARY KEY (id),
+    INDEX idx_employee_geo (lat, lng),
+    INDEX idx_employee_geo_ready (geo_ready)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci;
@@ -289,18 +298,30 @@ CREATE TABLE notification_rule
 
 CREATE TABLE notification_log
 (
-    alarm_id        INT                             NOT NULL AUTO_INCREMENT,
-    rule_id         INT                             NOT NULL,
-    template_id     INT                             NOT NULL,
-    receiver_id     INT                             NOT NULL,
-    receiver_type   ENUM ('RECIPIENT', 'EMPLOYEE')  NOT NULL,
-    sent_at         DATE                            NOT NULL,
-    status          ENUM ('SENT', 'FAILED', 'READ') NOT NULL,
-    read_at         DATE,
+    alarm_id      INT                                     NOT NULL AUTO_INCREMENT COMMENT '알림번호',
+
+    receiver_id   INT                                     NOT NULL COMMENT '수신자 번호',
+
+    receiver_type ENUM ('RECIPIENT', 'EMPLOYEE')          NOT NULL COMMENT '수신자 타입',
+
+    -- [추가] 템플릿 내용을 직접 저장 (스냅샷)
+    title         VARCHAR(50)                             NOT NULL COMMENT '제목',
+    content       VARCHAR(2000)                           NOT NULL COMMENT '내용',
+    template_type VARCHAR(50)                             NOT NULL COMMENT '유형 (예: 청구, 만료안내)',
+    severity      INT                                     NOT NULL COMMENT '중요도 (1:긴급, 2:중요, 3:일반)',
+    target_type   ENUM ('RECIPIENT', 'EMPLOYEE', 'BOTH')  NOT NULL COMMENT '타겟 타입',
+
+    -- [수정] DATE -> DATETIME (시간/분/초 저장 필수)
+    sent_at       DATETIME                                NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '발송시각',
+
+    status        ENUM ('SENT', 'FAILED', 'READ')         NOT NULL DEFAULT 'SENT' COMMENT '상태',
+
+    -- [수정] DATE -> DATETIME
+    read_at       DATETIME                                NULL COMMENT '읽은시간',
+
     CONSTRAINT pk_notification_log_alarm_id PRIMARY KEY (alarm_id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci;
+
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS m_service_type
 (
@@ -447,19 +468,19 @@ CREATE TABLE IF NOT EXISTS personal_schedule
   DEFAULT CHARSET = utf8mb4 COMMENT ='요양보호사 개인 일정';
 
 
-CREATE TABLE IF NOT EXISTS basic_evaluations
+CREATE TABLE basic_evaluations
 (
     eval_id        BIGINT      NOT NULL AUTO_INCREMENT,
     eval_type      VARCHAR(20) NOT NULL COMMENT '유형: FALL(낙상), BEDSORE(욕창), COGNITIVE(인지), NEEDS(욕구)',
     template_id    BIGINT      NOT NULL COMMENT '어떤 템플릿으로 평가했는지',
     eval_date      DATE        NOT NULL COMMENT '최신순 정렬용',
-    eval_data      JSON        NOT NULL COMMENT '평가 상세 내용 (문항, 점수, 총점, 등급 등)',
+    eval_data      LONGTEXT    NOT NULL COMMENT '평가 상세 내용 (문항, 점수, 총점, 등급 등)', -- JSON 타입 제약조건 에러(4025) 방지를 위해 LONGTEXT로 변경
+    special_note   TEXT        NULL COMMENT '특이사항',
     created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    beneficiary_id BIGINT      NOT NULL, -- beneficiary_id
-    care_worker_id INT         NOT NULL, -- care_worker_id
+    beneficiary_id BIGINT      NOT NULL,
+    care_worker_id INT         NOT NULL,
     PRIMARY KEY (eval_id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 CREATE TABLE IF NOT EXISTS eval_templates
 (
@@ -578,13 +599,14 @@ CREATE TABLE IF NOT EXISTS rental_contract
     start_date         date        NULL,
     end_date           date        NULL,
     expected_date	   date		   null,
+    calc_date		   date		   null,
     created_at         datetime    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     term_month         int         NOT NULL,
     beneficiary_id     BIGINT      NOT NULL,
     emp_id             int         NULL,
     cumulative_revenue int 		   not null default 0,
     product_cd         varchar(50) NOT NULL,
-    contract_status_cd INT         NOT NULL,
+    contract_status_cd INT         NOT NULL default 1,
     constraint pk_rental_contract_id primary key (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -702,7 +724,7 @@ CREATE TABLE IF NOT EXISTS product_tasks
     expected_date DATE        NULL,
     is_confirmed  varchar(1)  NULL COMMENT 'N: 예정, Y: 완료',
     completed_at  datetime    NULL,
-    created_at    datetime    NULL,
+    created_at    datetime    NULL DEFAULT now(),
     product_id    varchar(50) NULL,
     employee_id   int         NULL,
     constraint pk_product_tasks_id primary key (id),
@@ -746,15 +768,20 @@ CREATE TABLE personal_tag
 -- 4. ai_care: AI 케어 리포트/요약 테이블
 CREATE TABLE ai_care
 (
-    ai_id          VARCHAR(255) NOT NULL COMMENT 'AI 리포트 고유 ID',
-    ai_content     VARCHAR(255) NOT NULL COMMENT 'AI 요약 내용',
-    ai_month       DATE         NULL COMMENT '대상 월 (예: 2025-04-01)',
-    ai_create_at   DATETIME     NULL COMMENT 'AI 요약 생성 일시',
+    ai_id          BIGINT       NOT NULL AUTO_INCREMENT,
+    ai_content     TEXT         NOT NULL COMMENT 'AI 요약 내용',
+    ai_month       VARCHAR(7)   NOT NULL COMMENT '대상 월 (예: 2025-04)',
+    ai_create_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'AI 요약 생성 일시',
     beneficiary_id BIGINT       NOT NULL COMMENT '요양일지 수급자번호와 조인(FK 대상)',
+    ai_last_log_id BIGINT       NOT NULL COMMENT '이 요약에 마지막으로 반영된 care_logs.log_id',
+    ai_logs_count  BIGINT       NOT NULL DEFAULT 0 COMMENT '요약에 반영된 월별 로그 개수',
+    ai_last_service_date DATE   NOT NULL COMMENT '요약에 반영된 마지막 service_date',
+    ai_input_tokens BIGINT       NOT NULL COMMENT '요청 토큰',
+    ai_output_tokens  BIGINT       NOT NULL COMMENT '응답 토큰',
+    ai_total_tokens BIGINT NOT NULL COMMENT '요청+응답 총 토큰',
     PRIMARY KEY (ai_id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci;
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
 
 
 
@@ -833,7 +860,12 @@ CREATE TABLE beneficiary
     status                BOOLEAN      NOT NULL DEFAULT 0 COMMENT '0:서비스 해지, 1:서비스 중',
     potential_customer_id BIGINT       NOT NULL,
     risk_id               INT          NOT NULL,
-    CONSTRAINT pk_beneficiary_id PRIMARY KEY (id)
+    lat                   DECIMAL(10,7) NULL,
+    lng                   DECIMAL(10,7) NULL,
+    geo_ready        TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '좌표 준비 완료 여부(0:미완료,1:완료)',
+    CONSTRAINT pk_beneficiary_id PRIMARY KEY (id),
+    INDEX idx_beneficiary_geo (lat, lng),
+    INDEX idx_beneficiary_geo_ready (geo_ready)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci;
@@ -908,11 +940,11 @@ CREATE TABLE beneficiary_care_level
 CREATE TABLE expiration_of_care_level
 (
     id              INT        NOT NULL AUTO_INCREMENT,
-    expired_section INT        NOT NULL COMMENT '1:90일전, 2:60일전, 3:45일전',
+    expired_section INT        NULL COMMENT '1:90일전, 2:60일전, 3:45일전',
     outbound_status VARCHAR(1) NOT NULL DEFAULT 'N',
     extends_status  VARCHAR(1) NULL     DEFAULT 'N',
     beneficiary_id  BIGINT     NOT NULL,
-    emp_id          INT        NOT NULL,
+    emp_id          INT        NULL,
     CONSTRAINT pk_expiration_of_care_level_id PRIMARY KEY (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -925,7 +957,7 @@ CREATE TABLE notice_expiration
     notice_date   DATETIME      NOT NULL,
     memo          VARCHAR(2000) NULL,
     expiration_id INT           NOT NULL,
-    emp_id        INT           NOT NULL,
+    emp_id        INT           NULL,
     CONSTRAINT pk_notice_expiration_id PRIMARY KEY (id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -992,31 +1024,42 @@ CREATE TABLE beneficiary_count
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci;
 
-
-
 CREATE TABLE electronic_payment_process
 (
-    id                    INT            NOT NULL AUTO_INCREMENT,
-    approve               ENUM ('0','1') NOT NULL COMMENT '0:미승인, 1:승인',
-    drafter_id            INT            NOT NULL,
-    approver_id           INT            NOT NULL,
-    electronic_payment_id INT            NOT NULL,
-    INDEX (id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci;
+    id                    INT          NOT NULL AUTO_INCREMENT,
+    electronic_payment_id INT          NOT NULL COMMENT '관련 결재 문서 ID',
+    employee_id           INT          NOT NULL COMMENT '결재자(직원) ID',
+    step_order            INT          NOT NULL COMMENT '결재 순서 (1, 2, 3...)',
+    status                INT          NOT NULL DEFAULT 0 COMMENT '0:대기, 1:승인, 2:반려',
+    comment               VARCHAR(255) NULL     COMMENT '승인/반려 의견',
+    processed_at          DATETIME     NULL     COMMENT '처리 일시',
+
+    CONSTRAINT pk_electronic_payment_process_id PRIMARY KEY (id),
+    INDEX idx_process_payment_id (electronic_payment_id),
+    INDEX idx_process_employee_id (employee_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
 
 CREATE TABLE electronic_payment
 (
-    id                             INT            NOT NULL AUTO_INCREMENT,
-    number                         VARCHAR(50)    NOT NULL,
-    approve                        ENUM ('0','1') NOT NULL COMMENT '0:미승인, 1:승인',
-    employee_id                    INT            NOT NULL,
-    electronic_payment_category_id INT            NOT NULL COMMENT '전자결재유형번호',
-    INDEX (id)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_general_ci;
+    id                            INT            NOT NULL AUTO_INCREMENT,
+    employee_id                    INT            NOT NULL COMMENT '기안자(직원) ID',
+    electronic_payment_category_id INT           NOT NULL COMMENT '결재 유형 ID',
+    title                         VARCHAR(255)   NOT NULL,
+    content                       TEXT           NOT NULL,
+    status                        INT            NOT NULL DEFAULT 0 COMMENT '0:대기, 1:승인, 2:반려',
+    priority                      INT            NOT NULL DEFAULT 1 COMMENT '0:긴급, 1:보통, 2:낮음',
+    amount                        DECIMAL(15, 0) NULL     COMMENT '금액(구매/급여 시)',
+
+    start_date                    DATE           NULL     COMMENT '시작일(휴가/출장 등)',
+    end_date                      DATE           NULL     COMMENT '종료일(휴가/출장 등)',
+
+    created_at                    DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                    DATETIME       NULL     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_electronic_payment_id PRIMARY KEY (id),
+    INDEX idx_electronic_payment_status (status),
+    INDEX idx_electronic_payment_created_at (created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
 
 CREATE TABLE beneficiary_significant
 (
@@ -1168,6 +1211,24 @@ CREATE TABLE `product_history`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci;
 
+CREATE TABLE dashboard_settings
+(
+    id            INT           NOT NULL AUTO_INCREMENT,
+    employee_id   INT           NOT NULL,
+    widget_config JSON          NULL,
+    updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_general_ci;
+
+CREATE TABLE beneficiary_history (
+                                     id             BIGINT   NOT NULL AUTO_INCREMENT,
+                                     join_date      DATETIME NOT NULL COMMENT '가입일자',
+                                     terminate_date DATETIME NULL     COMMENT '해지일자 (NULL이면 활동 중)',
+                                     beneficiary_id BIGINT   NOT NULL COMMENT '수급자 참조 ID',
+                                     CONSTRAINT PK_BENEFICIARY_HISTORY PRIMARY KEY (id)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci;
 
 -- --------------------------------------------- 외래키 제 조건 -----------------------------------------------------------------------
 
@@ -1183,6 +1244,14 @@ ALTER TABLE employee
 ALTER TABLE employee
     ADD CONSTRAINT fk_employee_m_status
         FOREIGN KEY (status_id) REFERENCES m_status (status);
+
+ALTER TABLE employee
+    ADD CONSTRAINT uk_employee_email
+        UNIQUE (email);
+
+ALTER TABLE employee
+    ADD CONSTRAINT uk_employee_phone
+        UNIQUE (phone);
 
 -- employee_career
 ALTER TABLE employee_career
@@ -1274,18 +1343,6 @@ ALTER TABLE notification_rule
     ADD CONSTRAINT fk_notification_rule_notification_channel_type
         FOREIGN KEY (channel_type_id)
             REFERENCES notification_channel_type (channel_type_id);
-
-ALTER TABLE notification_log
-    ADD CONSTRAINT fk_notification_log_notification_rule
-        FOREIGN KEY (rule_id)
-            REFERENCES notification_rule (rule_id)
-            ON DELETE CASCADE;
-
-ALTER TABLE notification_log
-    ADD CONSTRAINT fk_notification_log_notification_template
-        FOREIGN KEY (template_id)
-            REFERENCES notification_template (template_id)
-            ON DELETE CASCADE;
 
 -- care_worker
 ALTER TABLE care_worker
@@ -1601,16 +1658,6 @@ ALTER TABLE beneficiary_count
             REFERENCES m_care_level (id)
             ON DELETE CASCADE;
 
-ALTER TABLE electronic_payment_process
-    ADD CONSTRAINT PK_ELECTRONIC_PAYMENT_PROCESS PRIMARY KEY (
-                                                              id
-        );
-
-ALTER TABLE electronic_payment
-    ADD CONSTRAINT PK_ELECTRONIC_PAYMENT PRIMARY KEY (
-                                                      id
-        );
-
 ALTER TABLE beneficiary_significant
     ADD CONSTRAINT PK_BENEFICIARY_SIGNIFICANT PRIMARY KEY (
                                                            id
@@ -1652,36 +1699,20 @@ ALTER TABLE m_counsel_category
         );
 
 ALTER TABLE electronic_payment
-    ADD CONSTRAINT FK_employee_TO_electronic_payment_1
+    ADD CONSTRAINT FK_electronic_payment_employee
         FOREIGN KEY (employee_id) REFERENCES employee (id);
 
 ALTER TABLE electronic_payment
-    ADD CONSTRAINT FK_payment_category
+    ADD CONSTRAINT FK_electronic_payment_electronic_payment_category
         FOREIGN KEY (electronic_payment_category_id) REFERENCES electronic_payment_category (id);
 
 ALTER TABLE electronic_payment_process
-    ADD CONSTRAINT FK_employee_TO_electronic_payment_process_1 FOREIGN KEY (
-                                                                            drafter_id
-        )
-        REFERENCES employee (
-                             id
-            );
+    ADD CONSTRAINT FK_electronic_payment_process_employee
+        FOREIGN KEY (employee_id) REFERENCES employee (id);
 
 ALTER TABLE electronic_payment_process
-    ADD CONSTRAINT FK_employee_TO_electronic_payment_process_2 FOREIGN KEY (
-                                                                            approver_id
-        )
-        REFERENCES employee (
-                             id
-            );
-
-ALTER TABLE electronic_payment_process
-    ADD CONSTRAINT FK_electronic_payment_TO_electronic_payment_process_1 FOREIGN KEY (
-                                                                                      electronic_payment_id
-        )
-        REFERENCES electronic_payment (
-                                       id
-            );
+    ADD CONSTRAINT FK_electronic_payment_process_electronic_payment
+        FOREIGN KEY (electronic_payment_id) REFERENCES electronic_payment (id);
 
 ALTER TABLE beneficiary_significant
     ADD CONSTRAINT FK_beneficiary_TO_beneficiary_significant_1 FOREIGN KEY (
@@ -1791,6 +1822,42 @@ alter table product_history
     add constraint fk_product_beneficiary foreign key (beneficiary_id) references beneficiary (id);
 
 
-
 alter table m_care_product
     add constraint fk_m_care_product_product_category FOREIGN key (category_cd) references product_category (id);
+
+
+alter table ai_care
+    add constraint fk_monthly_summary_beneficiary foreign key (beneficiary_id) references beneficiary (id);
+
+ALTER TABLE dashboard_settings
+    ADD CONSTRAINT fk_dashboard_settings_employee
+        FOREIGN KEY (employee_id) REFERENCES employee (id) -- employees 테이블의 PK 컬럼명 확인
+            ON DELETE CASCADE; -- 직원이 삭제되면 설정도 같이 삭제
+
+
+-- 직원 1명당 설정값 1개만 존재하도록 제한
+ALTER TABLE dashboard_settings
+    ADD CONSTRAINT uq_dashboard_settings_employee
+        UNIQUE (employee_id);
+
+-- 1. care_logs 테이블에 is_draft 컬럼 추가
+ALTER TABLE care_logs
+    ADD COLUMN is_draft BOOLEAN NOT NULL DEFAULT FALSE COMMENT '임시저장 여부';
+
+
+-- 2. basic_evaluations 테이블에 is_draft 컬럼 추가
+ALTER TABLE basic_evaluations
+    ADD COLUMN is_draft BOOLEAN NOT NULL DEFAULT FALSE COMMENT '임시저장 여부';
+
+-- 3. counseling_logs 테이블에 is_draft 컬럼 추가
+ALTER TABLE counseling_logs
+    ADD COLUMN is_draft BOOLEAN NOT NULL DEFAULT FALSE COMMENT '임시저장 여부';
+
+ALTER TABLE beneficiary_history
+    ADD CONSTRAINT fk_beneficiary_history_beneficiary
+        FOREIGN KEY (beneficiary_id)
+            REFERENCES beneficiary (id)
+            ON DELETE CASCADE;
+
+CREATE INDEX idx_beneficiary_history_join_date ON beneficiary_history (join_date);
+CREATE INDEX idx_beneficiary_history_terminate_date ON beneficiary_history (terminate_date);

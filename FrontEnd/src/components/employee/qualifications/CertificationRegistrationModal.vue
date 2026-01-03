@@ -1,11 +1,31 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   isOpen: Boolean
 });
 
 const emit = defineEmits(['close', 'submit']);
+
+// 키보드 이벤트 핸들러
+const handleKeydown = (e) => {
+  if (!props.isOpen) return;
+
+  if (e.key === 'Escape') {
+    emit('close');
+  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    // Ctrl+Enter 또는 Cmd+Enter로 제출
+    handleSubmit();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 
 // 자격증 종류 마스터 데이터 (실제 프로젝트에서는 API로 받아오거나 상수로 관리)
 const certificateOptions = [
@@ -26,18 +46,57 @@ const initialForm = {
 };
 
 const form = ref({ ...initialForm });
+const dateError = ref(''); // 에러 메시지 저장용
 
 // 모달이 열릴 때 폼 초기화
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     form.value = { ...initialForm };
+    dateError.value = '';
   }
 });
+
+// 날짜 유효성 검사 함수
+const validateDates = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // 시간 정보 제거 (날짜만 비교)
+
+  // 1. 발급일이 미래인지 체크
+  if (form.value.issueDate) {
+    const issue = new Date(form.value.issueDate);
+    if (issue > today) {
+      dateError.value = "발급일은 미래일 수 없습니다.";
+      return false;
+    }
+  }
+
+  // 2. 만료일이 발급일보다 이전인지 체크
+  if (form.value.issueDate && form.value.expireDate) {
+    const issue = new Date(form.value.issueDate);
+    const expire = new Date(form.value.expireDate);
+    if (issue > expire) {
+      dateError.value = "만료일은 발급일보다 이후여야 합니다.";
+      return false;
+    }
+  }
+
+  dateError.value = ''; // 에러 없음
+  return true;
+};
+
+// 값이 변할 때마다 감시
+watch(() => [form.value.issueDate, form.value.expireDate], validateDates, { deep: true });
 
 const handleSubmit = () => {
   // 유효성 검사
   if (!form.value.certificateId || !form.value.licenseNo || !form.value.issueDate) {
     alert('필수 정보를 모두 입력해주세요.');
+    return;
+  }
+
+  // 날짜 유효성 검사
+  if (!validateDates()) {
+    alert('날짜를 확인해주세요!');
     return;
   }
 
@@ -84,13 +143,27 @@ const handleSubmit = () => {
           <div class="grid-2">
             <div>
               <label class="block-label">발급일 <span class="text-red">*</span></label>
-              <input v-model="form.issueDate" type="date" class="input" />
+              <input
+                v-model="form.issueDate"
+                type="date"
+                class="input"
+                :class="{ 'input-error': dateError }"
+                :max="new Date().toISOString().split('T')[0]"
+              />
             </div>
             <div>
               <label class="block-label">만료일</label>
-              <input v-model="form.expireDate" type="date" class="input" />
+              <input
+                v-model="form.expireDate"
+                type="date"
+                class="input"
+                :class="{ 'input-error': dateError }"
+                :min="form.issueDate"
+              />
             </div>
           </div>
+
+          <p v-if="dateError" class="error-msg">{{ dateError }}</p>
 
           </form>
       </div>
@@ -205,6 +278,20 @@ const handleSubmit = () => {
 }
 .input::placeholder {
   color: #9ca3af;
+}
+.input-error {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+}
+.input-error:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+.error-msg {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 8px;
+  font-weight: 500;
 }
 .grid-2 {
   display: grid;

@@ -34,7 +34,7 @@
 </template>
 
 <script setup>
-import CustomerProcess from '@/components/inquiry/CustomerProcess.vue';
+import CustomerProcess from '@/components/inquiry/Customer/Process/CustomerProcess.vue';
 </script>
 
 <style scoped>

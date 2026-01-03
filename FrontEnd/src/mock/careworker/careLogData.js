@@ -1,68 +1,86 @@
 // 요양일지 작성 폼 데이터
 export const careLogFormData = {
-  // 기본 정보
-  basicInfo: {
-    recipientName: '',
-    careWorkerName: '',
-    careDate: '',
-    careTime: { start: '', end: '' },
-    serviceType: ''
-  },
-
   // 서비스 유형 옵션
   serviceTypes: [
-    { value: 'visit', label: '방문요양' },
-    { value: 'bathing', label: '방문목욕' },
-    { value: 'nursing', label: '방문간호' }
+    { value: '방문요양', label: '방문요양' },
+    { value: '방문목욕', label: '방문목욕' },
+    { value: '방문간호', label: '방문간호' }
   ],
 
   // 1. 신체활동 지원
   physicalSupport: {
     title: '1. 신체활동 지원',
-    items: [
+    sections: [
       {
-        code: 'washing',
-        label: '세면 도움',
+        code: 'meal',
+        label: '식사 도움',
+        type: 'checkbox',
         options: [
-          { value: 'none', label: '미해당' },
-          { value: 'partial', label: '부분 도움' },
-          { value: 'full', label: '전체 도움' }
+          { value: 'breakfast', label: '아침', field: 'isBreakfast' },
+          { value: 'lunch', label: '점심', field: 'isLunch' },
+          { value: 'dinner', label: '저녁', field: 'isDinner' },
+          { value: 'snack', label: '간식', field: 'isSnack' }
         ]
       },
       {
-        code: 'body_care',
-        label: '몸단장 도움',
+        code: 'excretion',
+        label: '배설 도움',
+        type: 'mixed',
         options: [
-          { value: 'hair', label: '머리빗기' },
-          { value: 'shave', label: '면도' },
-          { value: 'nail', label: '손발톱 정리' }
+          { value: 'diaper', label: '기저귀 교체', field: 'diaperCount', type: 'number', unit: '회' },
+          { value: 'toilet', label: '화장실 이용', field: 'toiletCount', type: 'number', unit: '회' },
+          { value: 'portable', label: '이동변기', field: 'isPortableToilet', type: 'checkbox' }
         ]
       },
       {
-        code: 'toileting',
-        label: '배변 도움',
+        code: 'excretion_status',
+        label: '상태',
+        type: 'checkbox',
         options: [
-          { value: 'toilet', label: '화장실 이용' },
-          { value: 'portable', label: '이동변기' },
-          { value: 'diaper', label: '기저귀 교환' }
+          { value: 'urine', label: '소변', field: 'isUrine' },
+          { value: 'stool', label: '대변', field: 'isStool' }
         ]
       },
       {
-        code: 'position',
-        label: '체위 변경',
+        code: 'stool_type',
+        label: '양상',
+        type: 'checkbox',
         options: [
-          { value: 'none', label: '해당없음' },
-          { value: 'sitting', label: '앉히기' },
-          { value: 'turning', label: '돌려눕히기' }
+          { value: 'normal', label: '정상', field: 'stoolNormal' },
+          { value: 'diarrhea', label: '설사', field: 'stoolDiarrhea' },
+          { value: 'constipation', label: '변비', field: 'stoolConstipation' }
         ]
       },
       {
-        code: 'mobility',
+        code: 'hygiene',
+        label: '개인 위생',
+        type: 'checkbox',
+        options: [
+          { value: 'face_wash', label: '세면', field: 'isFaceWash' },
+          { value: 'oral_care', label: '구강관리(양치)', field: 'isOralCare' },
+          { value: 'hair_wash', label: '머리감기', field: 'isHairWash' },
+          { value: 'body_wash', label: '몸 씻기(목욕)', field: 'isBodyWash' }
+        ]
+      },
+      {
+        code: 'grooming',
+        label: '몸 단장',
+        type: 'checkbox',
+        options: [
+          { value: 'change_clothes', label: '옷 갈아입기', field: 'isChangeClothes' },
+          { value: 'meal_prep', label: '식사 준비 및 정리', field: 'isMealPrep' },
+          { value: 'bed_care', label: '잠자리 정돈', field: 'isBedCare' }
+        ]
+      },
+      {
+        code: 'movement',
         label: '이동 도움',
+        type: 'checkbox',
         options: [
-          { value: 'indoor', label: '실내 이동' },
-          { value: 'outdoor', label: '실외 이동' },
-          { value: 'wheelchair', label: '휠체어 도움' }
+          { value: 'position_change', label: '체위 변경', field: 'isPositionChange' },
+          { value: 'get_up_help', label: '일어나 앉기 도움', field: 'isGetUpHelp' },
+          { value: 'indoor_move', label: '실내 이동', field: 'isIndoorMove' },
+          { value: 'walk_help', label: '산책/보행', field: 'isWalkHelp' }
         ]
       }
     ]
@@ -71,79 +89,65 @@ export const careLogFormData = {
   // 2. 인지 및 정서 지원
   cognitiveSupport: {
     title: '2. 인지 및 정서 지원',
-    items: [
+    sections: [
       {
-        code: 'mental_status',
-        label: '정신 상태',
+        code: 'emotional',
+        label: '정서 지원',
+        type: 'checkbox',
         options: [
-          { value: 'good', label: '명확 및 안정' },
-          { value: 'sometimes_confused', label: '때때로 혼란스러움' },
-          { value: 'confused', label: '혼란스러움/정신장애' }
+          { value: 'emotional_talk', label: '말벗 및 위로', field: 'isEmotionalTalk' },
+          { value: 'communication', label: '의사소통 도움', field: 'isCommunication' },
+          { value: 'counseling', label: '생활상담', field: 'isCounseling' }
         ]
       },
       {
-        code: 'communication',
-        label: '의사소통 여부',
+        code: 'cognitive',
+        label: '인지 관리',
+        type: 'checkbox',
         options: [
-          { value: 'possible', label: '가능함' },
-          { value: 'difficult', label: '어려움 있음' },
-          { value: 'impossible', label: '불가능' }
+          { value: 'cognitive_care', label: '인지자극활동(퍼즐, 그림그리기 등)', field: 'isCognitiveCare' },
+          { value: 'behavior_care', label: '인지행동변화 관리', field: 'isBehaviorCare' }
         ]
       }
     ]
   },
 
-  // 3. 신체 관찰 및 돌이상태
-  physicalObservation: {
-    title: '3. 신체 관찰 및 돌이상태',
-    items: [
+  // 3. 상태 관찰 및 특이사항
+  observationStatus: {
+    title: '3. 상태 관찰 및 특이사항',
+    sections: [
       {
-        code: 'meal_status',
-        label: '간병 상태',
-        fields: [
-          { code: 'breakfast', label: '아침', type: 'select', options: [
-            { value: 'full', label: '완전섭취' },
-            { value: 'half', label: '반 정도' },
-            { value: 'few', label: '조금만' },
-            { value: 'none', label: '안 먹음' }
-          ]},
-          { code: 'lunch', label: '점심', type: 'select', options: [
-            { value: 'full', label: '완전섭취' },
-            { value: 'half', label: '반 정도' },
-            { value: 'few', label: '조금만' },
-            { value: 'none', label: '안 먹음' }
-          ]},
-          { code: 'dinner', label: '저녁', type: 'select', options: [
-            { value: 'full', label: '완전섭취' },
-            { value: 'half', label: '반 정도' },
-            { value: 'few', label: '조금만' },
-            { value: 'none', label: '안 먹음' }
-          ]}
+        code: 'health',
+        label: '신체 상태',
+        type: 'checkbox',
+        options: [
+          { value: 'health_good', label: '양호', field: 'isHealthGood' },
+          { value: 'pain', label: '통증', field: 'isPain' },
+          { value: 'edema', label: '부종', field: 'isEdema' },
+          { value: 'skin_issue', label: '피부상태(발진/욕창 등)', field: 'isSkinIssue' },
+          { value: 'body_etc', label: '기타', field: 'isBodyEtc' }
         ]
       },
       {
-        code: 'stool_status',
+        code: 'mood',
         label: '기분 상태',
-        fields: [
-          { code: 'morning', label: '오전', type: 'select', options: [
-            { value: 'good', label: '좋음' },
-            { value: 'normal', label: '보통' },
-            { value: 'bad', label: '나쁨' }
-          ]},
-          { code: 'afternoon', label: '오후', type: 'select', options: [
-            { value: 'good', label: '좋음' },
-            { value: 'normal', label: '보통' },
-            { value: 'bad', label: '나쁨' }
-          ]}
+        type: 'checkbox',
+        options: [
+          { value: 'mood_calm', label: '평온', field: 'isMoodCalm' },
+          { value: 'mood_anxious', label: '불안', field: 'isMoodAnxious' },
+          { value: 'mood_depressed', label: '우울', field: 'isMoodDepressed' },
+          { value: 'mood_angry', label: '흥분/화냄', field: 'isMoodAngry' },
+          { value: 'mood_etc', label: '기타', field: 'isMoodEtc' }
         ]
       },
       {
-        code: 'vital_signs',
-        label: '생활 도움',
-        fields: [
-          { code: 'blood_pressure', label: '혈압', type: 'text', unit: 'mmHg' },
-          { code: 'temperature', label: '체온', type: 'text', unit: '℃' },
-          { code: 'pulse', label: '맥박', type: 'text', unit: '회/분' }
+        code: 'other',
+        label: '배설/수면',
+        type: 'checkbox',
+        options: [
+          { value: 'excretion_mistake', label: '배설 실수 있음', field: 'isExcretionMistake' },
+          { value: 'sleep_lack', label: '수면 부족', field: 'isSleepLack' },
+          { value: 'nap_excess', label: '낮잠 과다', field: 'isNapExcess' }
         ]
       }
     ]
@@ -151,12 +155,12 @@ export const careLogFormData = {
 
   // 특이사항 메모
   specialNotes: {
-    title: '특이사항 및 건강상태 메모',
+    title: '특이사항 및 인수인계 메모',
     placeholder: '오늘 서비스 시 특별히 관찰된 사항이나 전달할 내용을 기록해주세요.'
   }
 };
 
-// 낙상위험도 평가 데이터
+// 낙상위험도 평가 데이터 (필요시 사용)
 export const fallRiskAssessment = {
   title: '낙상위험도 평가',
   code: 'FALL',

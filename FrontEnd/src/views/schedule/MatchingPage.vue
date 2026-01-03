@@ -1,33 +1,38 @@
 <template>
   <div class="matching-page">
     <div class="top-area">
-      <!-- 왼쪽 : 수급자 / 요양보호사 리스트 -->
       <div class="left-column">
         <div class="list-panel">
-          <RecipientMatchingList @select-recipient="onSelectRecipient" />
+          <RecipientMatchingList
+            :refresh-key="store.refreshTick"
+            @select-recipient="onSelectRecipient"
+          />
         </div>
 
         <div class="list-panel">
           <CaregiverMatchingList
-            :recipient="selectedRecipient"
+            :recipient="store.recipient"
+            :refresh-key="store.refreshTick"
             @select-caregiver="onSelectCaregiver"
           />
         </div>
       </div>
 
-      <!-- 오른쪽 : 상세 + 주간 일정 -->
       <div class="right-column">
         <div class="detail-row">
           <div class="detail-panel">
             <RecipientDetailPanel
-              :recipient="selectedRecipient"
-              @remove-caregiver="onRemoveCaregiver"
+              :recipient="store.recipient"
+              :refresh-key="store.refreshTick"
+              @unassigned="onUnassigned"
+              @assigned-careworker="onAssignedCareworker"
             />
           </div>
 
           <div class="detail-panel">
             <CaregiverDetailPanel
-              :caregiver="selectedCaregiver"
+              :caregiver="store.caregiver"
+              :refresh-key="store.refreshTick"
               @remove-recipient="onRemoveRecipient"
             />
           </div>
@@ -35,8 +40,9 @@
 
         <div class="weekly-panel">
           <ScheduleWeeklyPanel
-            :recipient="selectedRecipient"
-            :caregiver="selectedCaregiver"
+            :recipient="store.recipient"
+            :caregiver="store.caregiver"
+            :refresh-key="store.refreshTick"
           />
         </div>
       </div>
@@ -45,42 +51,54 @@
 </template>
 
 <script setup>
-  import { ref } from 'vue'
-  
-  import RecipientMatchingList from '@/components/schedule/matching/RecipientMatchingList.vue'
-  import CaregiverMatchingList from '@/components/schedule/matching/CaregiverMatchingList.vue'
-  
-  import RecipientDetailPanel from '@/components/schedule/matching/recipientDetail/RecipientDetailPanel.vue'
-  import CaregiverDetailPanel from '@/components/schedule/matching/caregiverDetail/CaregiverDetailPanel.vue'
-  
-  import ScheduleWeeklyPanel from '@/components/schedule/matching/scheduleWeekly/ScheduleWeeklyPanel.vue'
+import RecipientMatchingList from '@/components/schedule/matching/RecipientMatchingList.vue'
+import CaregiverMatchingList from '@/components/schedule/matching/CaregiverMatchingList.vue'
 
-  import { useMatchingSelectionStore } from '@/stores/matchingSelection.js'
-  
-  const store = useMatchingSelectionStore()
-  
-  const selectedRecipient = ref(null)
-  const selectedCaregiver = ref(null)
-  
-  const onSelectRecipient = (recipient) => {
-    selectedRecipient.value = recipient
-    selectedCaregiver.value = null
-    store.setRecipient(recipient)
+import RecipientDetailPanel from '@/components/schedule/matching/recipientDetail/RecipientDetailPanel.vue'
+import CaregiverDetailPanel from '@/components/schedule/matching/caregiverDetail/CaregiverDetailPanel.vue'
+
+import ScheduleWeeklyPanel from '@/components/schedule/matching/scheduleWeekly/ScheduleWeeklyPanel.vue'
+
+import { useMatchingSelectionStore } from '@/stores/matchingSelection.js'
+
+const store = useMatchingSelectionStore()
+
+const getRecipientId = (r) => r?.beneficiaryId ?? r?.id ?? null
+const getCaregiverId = (c) => c?.careWorkerId ?? c?.id ?? null
+
+const onSelectRecipient = (recipient) => {
+  const nextId = getRecipientId(recipient)
+  if (!nextId) return
+  if (nextId === store.recipientId) {
+    store.syncRecipient(recipient)
+    return
   }
-  
-  const onSelectCaregiver = (caregiver) => {
-    selectedCaregiver.value = caregiver
-    store.setCaregiver(caregiver)
+  store.setRecipient(recipient)
+}
+
+const onSelectCaregiver = (caregiver) => {
+  const nextId = getCaregiverId(caregiver)
+  if (!nextId) return
+  if (nextId === store.caregiverId) {
+    store.syncCaregiver(caregiver)
+    return
   }
-  
-  const onRemoveCaregiver = (cg) => {
-    console.log('수급자에서 요양보호사 매칭 해제', cg)
-  }
-  
-  const onRemoveRecipient = (rcp) => {
-    console.log('요양보호사에서 수급자 매칭 해제', rcp)
-  }
-  </script>
+  store.setCaregiver(caregiver)
+}
+
+const onRemoveRecipient = (rcp) => {
+  console.log('요양보호사에서 수급자 매칭 해제', rcp)
+}
+
+const onAssignedCareworker = (cw) => {
+  if (!cw) return
+  store.setCaregiver(cw)
+}
+
+const onUnassigned = () => {
+  store.setCaregiver(null)
+}
+</script>
 
 <style scoped>
 .matching-page {

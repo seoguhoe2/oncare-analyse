@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.query.dto.ApiResponse;
 import org.ateam.oncare.careworker.query.dto.BasicEvaluationDetailDto;
 import org.ateam.oncare.careworker.query.dto.BasicEvaluationListDto;
 import org.ateam.oncare.careworker.query.service.BasicEvaluationQueryService;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,9 +22,10 @@ public class BedsoreEvaluationQueryController {
     // 1. 욕창위험도 평가 목록 조회 (요양보호사별)
     @GetMapping
     public ApiResponse<List<BasicEvaluationListDto>> getBedsoreEvaluationList(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId,
+            @AuthenticationPrincipal EmployeeImpl employee,
             @RequestParam(required = false) Integer year) {
-        List<BasicEvaluationListDto> data = basicEvaluationQueryService.getBasicEvaluationListByType(careWorkerId, EVAL_TYPE, year);
+        List<BasicEvaluationListDto> data = basicEvaluationQueryService.getBasicEvaluationListByType(employee.getId(),
+                EVAL_TYPE, year);
         return ApiResponse.success(data);
     }
 
@@ -31,7 +34,8 @@ public class BedsoreEvaluationQueryController {
     public ApiResponse<List<BasicEvaluationListDto>> getBedsoreEvaluationListByBeneficiary(
             @PathVariable Long beneficiaryId,
             @RequestParam(required = false) Integer year) {
-        List<BasicEvaluationListDto> data = basicEvaluationQueryService.getBasicEvaluationListByBeneficiaryAndType(beneficiaryId, EVAL_TYPE, year);
+        List<BasicEvaluationListDto> data = basicEvaluationQueryService
+                .getBasicEvaluationListByBeneficiaryAndType(beneficiaryId, EVAL_TYPE, year);
         return ApiResponse.success(data);
     }
 

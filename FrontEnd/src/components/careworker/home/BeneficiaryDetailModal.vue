@@ -1,11 +1,15 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { getBeneficiaryDetail } from '@/api/careworker';
 
 const props = defineProps({
   isOpen: Boolean,
   beneficiaryId: {
     type: [String, Number],
+    default: null
+  },
+  serviceType: {
+    type: String,
     default: null
   }
 });
@@ -64,6 +68,21 @@ watch(() => props.isOpen, (isOpen) => {
 const onClose = () => {
   emit('close');
 };
+
+// ESC 키로 모달 닫기
+const handleKeydown = (event) => {
+  if (event.key === 'Escape' && props.isOpen) {
+    onClose();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
@@ -116,6 +135,10 @@ const onClose = () => {
               <div class="info-item">
                 <span class="info-label">성별</span>
                 <span class="info-value">{{ beneficiary.gender === 'M' ? '남성' : beneficiary.gender === 'F' ? '여성' : beneficiary.gender || '-' }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">서비스 유형</span>
+                <span class="info-value">{{ serviceType || beneficiary.serviceType || beneficiary.serviceLabel || beneficiary.service || '-' }}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">장기요양인정번호</span>

@@ -19,6 +19,7 @@ const props = defineProps({
 
 const currentView = ref('day'); // 현재 뷰 타입 (일간)
 const timeSlots = Array.from({ length: 12 }, (_, i) => i + 7); // 7시~18시
+const SLOT_HEIGHT = 80; // 각 시간 칸의 높이 (px)
 
 const scheduleData = computed(() => props.schedules || []);
 
@@ -71,19 +72,70 @@ const goToday = () => {
   emit('date-change', newDate);
 };
 
-// 겹치는 일정 감지 및 배치 계산
-const getOverlappingSchedules = () => {
-  const overlaps = {};
+// 시간을 분 단위로 변환
+const timeToMinutes = (time) => {
+  const [hour, min] = time.split(':').map(Number);
+  return hour * 60 + min;
+};
 
-  scheduleData.value.forEach((schedule, index) => {
-    const key = `${schedule.startTime}-${schedule.endTime}`;
-    if (!overlaps[key]) {
-      overlaps[key] = [];
+// 두 일정이 시간적으로 겹치는지 확인
+const isOverlapping = (start1, end1, start2, end2) => {
+  const s1 = timeToMinutes(start1);
+  const e1 = timeToMinutes(end1);
+  const s2 = timeToMinutes(start2);
+  const e2 = timeToMinutes(end2);
+
+  // 겹침 조건: 한 일정의 시작이 다른 일정의 종료 전이고, 종료가 다른 일정의 시작 후인 경우
+  return s1 < e2 && e1 > s2;
+};
+
+// 겹치는 일정 그룹 찾기 (서로 연결된 모든 일정)
+const getOverlappingGroup = (currentSchedule) => {
+  const group = new Set();
+  const toCheck = [currentSchedule];
+
+  while (toCheck.length > 0) {
+    const checking = toCheck.pop();
+    if (group.has(checking.id)) continue;
+
+    group.add(checking.id);
+
+    // 현재 일정과 겹치는 모든 일정 찾기
+    scheduleData.value.forEach(schedule => {
+      if (!group.has(schedule.id) && isOverlapping(
+        checking.startTime,
+        checking.endTime,
+        schedule.startTime,
+        schedule.endTime
+      )) {
+        toCheck.push(schedule);
+      }
+    });
+  }
+
+  // 그룹에 속한 일정들을 시작 시간 순으로 정렬
+  const groupSchedules = scheduleData.value.filter(s => group.has(s.id));
+
+  return groupSchedules.sort((a, b) => {
+    const startA = timeToMinutes(a.startTime);
+    const startB = timeToMinutes(b.startTime);
+
+    if (startA !== startB) {
+      return startA - startB; // 시작 시간이 이른 것부터
     }
-    overlaps[key].push({ schedule, index });
-  });
 
-  return overlaps;
+    const endA = timeToMinutes(a.endTime);
+    const endB = timeToMinutes(b.endTime);
+
+    if (endA !== endB) {
+      return endA - endB; // 종료 시간이 이른 것부터
+    }
+
+    // 시작/종료 시간이 같으면 ID로 정렬
+    const idA = typeof a.id === 'string' ? a.id : String(a.id);
+    const idB = typeof b.id === 'string' ? b.id : String(b.id);
+    return idA.localeCompare(idB);
+  });
 };
 
 // 위치 계산 (start~end) + 겹치는 일정 처리
@@ -93,24 +145,35 @@ const getPositionStyle = (start, end, scheduleId) => {
   const endHour = parseInt(end.split(':')[0]);
   const endMin = parseInt(end.split(':')[1]);
 
-  const top = ((startHour - 7) * 60) + startMin;
-  const heightRaw = ((endHour - startHour) * 60) + (endMin - startMin);
-  // 연속된 일정이 겹치지 않도록 하단에 8px 여백 추가
-  const height = heightRaw - 8;
+  // 시간당 픽셀 비율 계산 (SLOT_HEIGHT / 60분)
+  const pixelPerMin = SLOT_HEIGHT / 60;
+  const top = ((startHour - 7) * SLOT_HEIGHT) + (startMin * pixelPerMin);
+  const heightRaw = ((endHour - startHour) * SLOT_HEIGHT) + ((endMin - startMin) * pixelPerMin);
+  // 연속된 일정이 겹치지 않도록 하단에 12px 여백 추가
+  const height = heightRaw - 12;
 
-  // 같은 시간대의 일정들 찾기
-  const key = `${start}-${end}`;
-  const overlaps = getOverlappingSchedules();
-  const sameTimeSchedules = overlaps[key] || [];
+  // 현재 일정 찾기
+  const currentSchedule = scheduleData.value.find(s => s.id === scheduleId);
+  if (!currentSchedule) {
+    return {
+      top: `${top}px`,
+      height: `${height}px`,
+      width: '95%',
+      left: '0',
+    };
+  }
 
-  // 현재 일정이 몇 번째인지 찾기
-  const currentIndex = sameTimeSchedules.findIndex(item => item.schedule.id === scheduleId);
-  const totalCount = sameTimeSchedules.length;
+  // 겹치는 일정들 찾기 (그래프 탐색으로 연결된 모든 일정 포함)
+  const overlappingSchedules = getOverlappingGroup(currentSchedule);
+  const totalCount = overlappingSchedules.length;
+
+  // 현재 일정의 인덱스 찾기
+  const currentIndex = overlappingSchedules.findIndex(s => s.id === scheduleId);
 
   // 겹치는 일정이 있으면 너비를 나누고 위치 조정
   if (totalCount > 1) {
-    const widthPercent = 95 / totalCount; // 전체 너비를 개수만큼 나눔
-    const leftPercent = (widthPercent * currentIndex);
+    const widthPercent = 100 / totalCount; // 전체를 균등 분할 (예: 4개면 25%씩)
+    const leftPercent = widthPercent * currentIndex; // 왼쪽 위치 (겹치지 않게)
 
     return {
       top: `${top}px`,
@@ -123,7 +186,7 @@ const getPositionStyle = (start, end, scheduleId) => {
   return {
     top: `${top}px`,
     height: `${height}px`,
-    width: '95%',
+    width: '100%',
     left: '0',
   };
 };
@@ -164,13 +227,13 @@ const getPositionStyle = (start, end, scheduleId) => {
 
         <div v-for="item in scheduleData" :key="item.id"
              class="schedule-block"
+             :class="item.colorClass"
              :style="getPositionStyle(item.startTime, item.endTime, item.id)"
              @click="handleSelect(item)">
           <div class="block-content">
             <div class="block-time">시간 {{ item.startTime }} - {{ item.endTime }}</div>
             <div class="block-title">{{ item.recipient }}</div>
             <div class="block-sub">{{ item.serviceType || item.serviceLabel }}</div>
-            <div class="block-loc">📍 {{ item.address?.split(' ')[1] || '' }}</div>
           </div>
         </div>
       </div>
@@ -221,18 +284,16 @@ const getPositionStyle = (start, end, scheduleId) => {
 /* 타임라인 바디 */
 .day-view-body { display: flex; flex: 1; overflow-y: auto; min-height: 600px; border-top: 1px solid #f3f4f6; }
 .time-axis { width: 60px; border-right: 1px solid #f3f4f6; background-color: #fff; }
-.time-slot { height: 60px; font-size: 0.75rem; color: #9ca3af; text-align: right; padding-right: 10px; transform: translateY(-8px); }
+.time-slot { height: 80px; font-size: 0.75rem; color: #9ca3af; text-align: right; padding-right: 10px; transform: translateY(-8px); }
 
 .schedule-grid { flex: 1; position: relative; margin-left: 10px; }
 .grid-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-.grid-line { height: 60px; border-top: 1px solid #f3f4f6; box-sizing: border-box; }
+.grid-line { height: 80px; border-top: 1px solid #f3f4f6; box-sizing: border-box; }
 
 .schedule-block {
   position: absolute;
   left: 0;
   width: 95%;
-  background-color: #fef9c3; /* 밝은 노랑 */
-  border-left: 4px solid #eab308; /* 진한 노랑 */
   border-radius: 4px;
   padding: 0.5rem;
   cursor: pointer;
@@ -242,8 +303,45 @@ const getPositionStyle = (start, end, scheduleId) => {
 }
 .schedule-block:hover { transform: scale(1.01); box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 20; }
 
-.block-time { font-size: 0.75rem; color: #854d0e; margin-bottom: 2px; }
-.block-title { font-weight: 700; color: #713f12; margin-bottom: 2px; }
-.block-sub { font-size: 0.8rem; color: #854d0e; margin-bottom: 4px; }
-.block-loc { font-size: 0.75rem; color: #a16207; }
+/* 일정 색상 클래스 (상태별) */
+.bg-blue { background-color: #dbeafe; border-left: 4px solid #3b82f6; }      /* 예정 */
+.bg-blue .block-time,
+.bg-blue .block-title,
+.bg-blue .block-sub,
+.bg-blue .block-loc { color: #1e40af; }
+
+.bg-green { background-color: #dcfce7; border-left: 4px solid #22c55e; }     /* 진행중 */
+.bg-green .block-time,
+.bg-green .block-title,
+.bg-green .block-sub,
+.bg-green .block-loc { color: #166534; }
+
+.bg-red { background-color: #fee2e2; border-left: 4px solid #ef4444; }       /* 완료 */
+.bg-red .block-time,
+.bg-red .block-title,
+.bg-red .block-sub,
+.bg-red .block-loc { color: #991b1b; }
+
+.bg-purple { background-color: #f3e8ff; border-left: 4px solid #9333ea; }    /* 개인일정 */
+.bg-purple .block-time,
+.bg-purple .block-title,
+.bg-purple .block-sub,
+.bg-purple .block-loc { color: #6b21a8; }
+
+.bg-gray { background-color: #f3f4f6; border-left: 4px solid #9ca3af; }      /* 취소 */
+.bg-gray .block-time,
+.bg-gray .block-title,
+.bg-gray .block-sub,
+.bg-gray .block-loc { color: #6b7280; }
+
+.bg-yellow { background-color: #fef9c3; border-left: 4px solid #eab308; }
+.bg-yellow .block-time,
+.bg-yellow .block-title,
+.bg-yellow .block-sub,
+.bg-yellow .block-loc { color: #854d0e; }
+
+.block-time { font-size: 0.75rem; margin-bottom: 2px; }
+.block-title { font-weight: 700; margin-bottom: 2px; }
+.block-sub { font-size: 0.8rem; margin-bottom: 4px; }
+.block-loc { font-size: 0.75rem; }
 </style>

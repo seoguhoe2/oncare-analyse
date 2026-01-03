@@ -1,0 +1,48 @@
+export const productHistoryMock = [
+    {
+      id: 1,
+      managementCode: 'MG001-001',
+      productName: '전동침대',
+      type: '구매',
+      date: '2024-01-10',
+      description: '전동침대 신규 구매 (구매가: ₩800,000)',
+      staff: '김담당',
+    },
+    {
+      id: 2,
+      managementCode: 'MG001-001',
+      productName: '전동침대',
+      type: '입고',
+      date: '2024-01-15',
+      description: '본사 창고 입고 완료',
+      staff: '김담당',
+    },
+    {
+      id: 3,
+      managementCode: 'MG001-002',
+      productName: '전동침대',
+      type: '구매',
+      date: '2024-02-05',
+      description: '전동침대 신규 구매 (구매가: ₩800,000)',
+      staff: '김담당',
+    },
+    {
+      id: 4,
+      managementCode: 'MG001-002',
+      productName: '전동침대',
+      type: '입고',
+      date: '2024-02-10',
+      description: '본사 창고 입고 완료',
+      staff: '김담당',
+    },
+    {
+      id: 5,
+      managementCode: 'MG001-002',
+      productName: '전동침대',
+      type: '렌탈',
+      date: '2024-02-15',
+      description: '이철수 수급자에게 렌탈 시작 (월 ₩35,000)',
+      staff: '박담당',
+    },
+    // 필요하면 다른 관리코드용 이벤트도 추가
+  ]

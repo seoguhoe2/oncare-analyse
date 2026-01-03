@@ -39,9 +39,9 @@ export const visitCounselData = {
           code: 'recipient',
           label: '수급자',
           type: 'text',
-          required: true,
+          required: false,
           gridColumn: 'half',
-          placeholder: '수급자를 입력하세요.'
+          placeholder: '수급자를 선택하세요.'
         },
         {
           code: 'visit_type',
@@ -71,11 +71,11 @@ export const visitCounselData = {
         },
         {
           code: 'observed_condition',
-          label: '관찰 기록',
+          label: '참석 가족',
           type: 'textarea',
           required: false,
-          placeholder: '예: 아침 (김밥/만족)',
-          rows: 2
+          placeholder: '예: 아들 (김민준)',
+          rows: 1
         },
         {
           code: 'subjective_needs',
@@ -87,21 +87,19 @@ export const visitCounselData = {
         },
         {
           code: 'counselor_notes',
-          label: '상담 서향',
+          label: '합의 사항',
           type: 'textarea',
           required: true,
-          placeholder: '향후의 서향, 향후 계획 등을 입력하세요',
+          placeholder: '합의된 사항, 향후 계획 등을 입력하세요',
           rows: 3
         },
         {
           code: 'next_action',
           label: '다음 방문 예정일',
-          type: 'select',
+          type: 'date',
           required: false,
-          options: [
-            { code: 'week', label: '연도-월-일' }
-          ],
-          placeholder: '연도-월-일'
+          gridColumn: 'half',
+          placeholder: '다음 방문 예정일을 선택하세요'
         }
       ]
     }

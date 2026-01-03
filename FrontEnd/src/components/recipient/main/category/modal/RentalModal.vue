@@ -1,7 +1,8 @@
 <!-- src/components/recipient/main/category/modal/RentalModal.vue -->
 <template>
   <div v-if="modelValue" class="modal-backdrop" @click.self="close">
-    <div class="modal-panel" :class="{ current: isCurrent, past: !isCurrent }">
+    <div class="modal-panel">
+      <!-- Header -->
       <header class="modal-header">
         <div class="title-row">
           <h3>렌탈 용품 상세</h3>
@@ -14,13 +15,13 @@
             <span>{{ detail?.productName ?? summaryItem?.productName ?? "-" }}</span>
           </div>
 
-          <!-- ✅ 종료면 서비스 해지 색과 동일 -->
           <span class="status-pill" :class="statusPillClass">
-            {{ detail?.contractStatusName ?? summaryItem?.contractStatusName ?? statusFallback }}
+            {{ statusLabel }}
           </span>
         </div>
       </header>
 
+      <!-- Body -->
       <section class="modal-body">
         <div v-if="loading" class="state-text">불러오는 중...</div>
         <div v-else-if="errorMsg" class="state-text error">{{ errorMsg }}</div>
@@ -56,8 +57,8 @@
                 <div class="value">{{ detail.startDate || "-" }}</div>
               </div>
               <div class="field">
-                <div class="label">{{ isCurrent ? "만료일" : "종료일" }}</div>
-                <div class="value">{{ detail.endDate || (isCurrent ? "진행중" : "-") }}</div>
+                <div class="label">종료일</div>
+                <div class="value">{{ detail.endDate || "진행중" }}</div>
               </div>
             </div>
           </section>
@@ -82,9 +83,10 @@
         </template>
       </section>
 
+      <!-- Footer -->
       <footer class="modal-footer">
         <button
-          v-if="isCurrent"
+          v-if="!isEnded"
           type="button"
           class="primary-btn danger"
           :disabled="completing || loading"
@@ -93,7 +95,9 @@
           {{ completing ? "처리 중..." : "계약 완료로 변경" }}
         </button>
 
-        <button v-else type="button" class="primary-btn" @click="close">닫기</button>
+        <button v-else type="button" class="primary-btn" @click="close">
+          닫기
+        </button>
       </footer>
     </div>
   </div>
@@ -106,30 +110,29 @@ import api from "@/lib/api";
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   beneficiaryId: { type: Number, required: true },
-  summaryItem: { type: Object, default: null }, // rentalContractId + productAssetId 필요
-  type: { type: String, default: "current" },   // 'current' | 'past'
+  summaryItem: { type: Object, default: null }, // rentalContractId + productAssetId (+ contractStatusName)
 });
 
 const emit = defineEmits(["update:modelValue", "completed"]);
 
-const isCurrent = computed(() => props.type === "current");
-
 const loading = ref(false);
 const errorMsg = ref("");
 const detail = ref(null);
-
 const completing = ref(false);
 
-const statusFallback = computed(() => (isCurrent.value ? "계약중" : "종료"));
+const close = () => emit("update:modelValue", false);
 
+const statusLabel = computed(
+  () => detail.value?.contractStatusName ?? props.summaryItem?.contractStatusName ?? "-"
+);
+const isEnded = computed(() => String(statusLabel.value).trim() === "종료");
+const statusPillClass = computed(() => (isEnded.value ? "ended" : "using"));
+
+const formatCurrency = (n) => `${(n ?? 0).toLocaleString("ko-KR")}원`;
 const durationLabel = computed(() => {
   const m = detail.value?.durationMonths;
   return m ? `${m}개월` : "";
 });
-
-const formatCurrency = (n) => `${(n ?? 0).toLocaleString("ko-KR")}원`;
-
-const close = () => emit("update:modelValue", false);
 
 const fetchDetail = async () => {
   if (!props.modelValue) return;
@@ -153,7 +156,6 @@ const fetchDetail = async () => {
     detail.value = data ?? null;
   } catch (e) {
     console.error(e);
-    detail.value = null;
     errorMsg.value = "렌탈 상세 정보를 불러오지 못했습니다.";
   } finally {
     loading.value = false;
@@ -161,34 +163,23 @@ const fetchDetail = async () => {
 };
 
 watch(
-  () => [props.modelValue, props.beneficiaryId, props.summaryItem?.rentalContractId, props.summaryItem?.productAssetId],
+  () => [props.modelValue, props.summaryItem?.rentalContractId, props.summaryItem?.productAssetId],
   fetchDetail,
   { immediate: true }
 );
 
-/** ✅ 종료면 회색(state-off), 아니면 current/past에 따라 기본값 */
-const statusPillClass = computed(() => {
-  const s = String(detail.value?.contractStatusName ?? props.summaryItem?.contractStatusName ?? statusFallback.value).trim();
-  if (s === "종료") return "ended"; // 서비스 해지 색
-  return isCurrent.value ? "using" : "done";
-});
-
 const onCompleteClick = async () => {
   if (completing.value) return;
-
-  const rentalContractId = props.summaryItem?.rentalContractId;
-  if (!props.beneficiaryId || !rentalContractId) return;
-
   completing.value = true;
   errorMsg.value = "";
 
   try {
     const { data } = await api.patch(
-      `/api/beneficiaries/${props.beneficiaryId}/rentals/${rentalContractId}/complete`
+      `/api/beneficiaries/${props.beneficiaryId}/rentals/${props.summaryItem.rentalContractId}/complete`
     );
 
     if (!data?.success) {
-      errorMsg.value = data?.message || "계약 완료 처리에 실패했습니다.";
+      errorMsg.value = data?.message || "계약 완료 처리 실패";
       return;
     }
 
@@ -196,7 +187,7 @@ const onCompleteClick = async () => {
     emit("update:modelValue", false);
   } catch (e) {
     console.error(e);
-    errorMsg.value = "계약 완료 처리에 실패했습니다.";
+    errorMsg.value = "계약 완료 처리 실패";
   } finally {
     completing.value = false;
   }
@@ -204,6 +195,7 @@ const onCompleteClick = async () => {
 </script>
 
 <style scoped>
+/* ✅ 모달이 아래로 내려가는 문제는 대부분 여기(position: fixed)가 적용 안 된 케이스 */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -211,7 +203,7 @@ const onCompleteClick = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: 9999;
 }
 
 .modal-panel {
@@ -225,16 +217,10 @@ const onCompleteClick = async () => {
   overflow: hidden;
 }
 
-.modal-panel.current .modal-header {
-  background: #ecfdf3;
-}
-.modal-panel.past .modal-header {
-  background: #f9fafb;
-}
-
 .modal-header {
   padding: 16px 20px 14px;
   border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .title-row {
@@ -277,7 +263,6 @@ const onCompleteClick = async () => {
   justify-content: center;
 }
 
-/* ✅ 상태 pill */
 .status-pill {
   padding: 4px 10px;
   border-radius: 999px;
@@ -288,14 +273,9 @@ const onCompleteClick = async () => {
   background-color: #dcfce7;
   color: #15803d;
 }
-.status-pill.done {
-  background-color: #e5e7eb;
-  color: #4b5563;
-}
-/* ✅ 종료면 "서비스 해지(state-off)" 색과 동일 */
 .status-pill.ended {
-  background-color: #e5e7eb; /* state-off 배경 */
-  color: #374151;           /* state-off 글자 */
+  background-color: #e5e7eb;
+  color: #374151;
 }
 
 .modal-body {

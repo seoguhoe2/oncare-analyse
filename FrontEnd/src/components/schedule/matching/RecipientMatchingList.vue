@@ -2,7 +2,7 @@
   <section class="matching-panel">
     <header class="panel-header">
       <h2 class="panel-title">수급자</h2>
-      <span class="count-badge">{{ recipients.length }}명</span>
+      <span class="count-badge">{{ total }}명</span>
     </header>
 
     <div class="search-bar">
@@ -15,7 +15,7 @@
         <tbody>
           <tr
             v-for="item in pagedList"
-            :key="item.beneficiaryId"
+            :key="item.beneficiaryId ?? item.id"
             class="list-row"
             :class="{ selected: selectedBeneficiaryId === (item.beneficiaryId ?? item.id) }"
             @click="handleSelect(item)"
@@ -32,8 +32,12 @@
             </td>
           </tr>
 
-          <tr v-if="!pagedList.length">
+          <tr v-if="!pagedList.length && !loading">
             <td colspan="4" class="dash">표시할 수급자가 없습니다.</td>
+          </tr>
+
+          <tr v-if="loading">
+            <td colspan="4" class="dash">불러오는 중...</td>
           </tr>
         </tbody>
       </table>
@@ -42,79 +46,120 @@
     <div class="pagination">
       <button @click="prevPage" :disabled="page === 1">〈</button>
       <span>{{ page }} / {{ totalPages }}</span>
-      <button @click="nextPage" :disabled="page === totalPages">〉</button>
+      <button @click="nextPage" :disabled="page >= totalPages">〉</button>
     </div>
   </section>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import searchIcon from '@/assets/img/common/search.png'
-import { getBeneficiaryList } from '@/api/schedule/matching.js'
-
-const emit = defineEmits(['select-recipient'])
-
-const search = ref('')
-const page = ref(1)
-const pageSize = 10
-
-const recipientsRaw = ref([])
-const selectedBeneficiaryId = ref(null)
-
-const load = async () => {
-  try {
-    const { data } = await getBeneficiaryList()
-    recipientsRaw.value = Array.isArray(data) ? data : []
-  } catch (e) {
-    recipientsRaw.value = []
-    console.error(e)
+  import { ref, computed, onMounted, watch } from 'vue'
+  import searchIcon from '@/assets/img/common/search.png'
+  import { getBeneficiaryList } from '@/api/schedule/matching.js'
+  import { useMatchingSelectionStore } from '@/stores/matchingSelection'
+  
+  const props = defineProps({
+    refreshKey: { type: Number, default: 0 },
+  })
+  
+  const emit = defineEmits(['select-recipient'])
+  const store = useMatchingSelectionStore()
+  
+  const search = ref('')
+  const page = ref(1)
+  const pageSize = 8
+  
+  const recipientsRaw = ref([])
+  const selectedBeneficiaryId = ref(null)
+  
+  const total = ref(0)
+  const loading = ref(false)
+  
+  const getId = (item) => item?.beneficiaryId ?? item?.id ?? null
+  
+  const fetchList = async () => {
+    loading.value = true
+    try {
+      const { data } = await getBeneficiaryList({
+        page: page.value - 1,
+        size: pageSize,
+        keyword: search.value?.trim() || null,
+      })
+  
+      const content = Array.isArray(data?.content) ? data.content : []
+      recipientsRaw.value = content
+      total.value = Number.isFinite(data?.total) ? data.total : 0
+  
+      const storeId = store.recipientId
+      if (storeId) {
+        const found = content.find((r) => getId(r) === storeId)
+        if (found) {
+          selectedBeneficiaryId.value = storeId
+          store.syncRecipient(found)
+          emit('select-recipient', found)
+        }
+      }
+    } catch (e) {
+      recipientsRaw.value = []
+      total.value = 0
+      console.error(e)
+    } finally {
+      loading.value = false
+    }
   }
-}
-
-onMounted(load)
-
-watch(search, () => {
-  page.value = 1
-})
-
-const recipients = computed(() => {
-  const q = search.value.toLowerCase().trim()
-  if (!q) return recipientsRaw.value
-
-  return recipientsRaw.value.filter((r) =>
-    [r.name, r.gender, r.riskLevel].some((f) =>
-      String(f ?? '').toLowerCase().includes(q)
-    )
+  
+  onMounted(fetchList)
+  
+  watch(search, async () => {
+    page.value = 1
+    await fetchList()
+  })
+  
+  watch(page, async () => {
+    await fetchList()
+  })
+  
+  watch(
+    () => props.refreshKey,
+    async () => {
+      await fetchList()
+    }
   )
-})
-
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(recipients.value.length / pageSize))
-)
-
-const pagedList = computed(() =>
-  recipients.value.slice((page.value - 1) * pageSize, page.value * pageSize)
-)
-
-const prevPage = () => {
-  if (page.value > 1) page.value--
-}
-const nextPage = () => {
-  if (page.value < totalPages.value) page.value++
-}
-
-const handleSelect = (item) => {
-  const beneficiaryId = item?.beneficiaryId ?? item?.id ?? null
-  selectedBeneficiaryId.value = beneficiaryId
-  emit('select-recipient', item)
-}
-
-const badgeClass = (gender) => ({
-  badge: true,
-  male: gender === '남자',
-  female: gender === '여자',
-})
-</script>
+  
+  watch(
+    () => store.recipientId,
+    (id) => {
+      selectedBeneficiaryId.value = id
+    },
+    { immediate: true }
+  )
+  
+  const pagedList = computed(() => recipientsRaw.value)
+  
+  const totalPages = computed(() => {
+    const tp = Math.ceil((total.value || 0) / pageSize)
+    return Math.max(1, tp)
+  })
+  
+  const prevPage = () => {
+    if (page.value > 1) page.value--
+  }
+  
+  const nextPage = () => {
+    if (page.value < totalPages.value) page.value++
+  }
+  
+  const handleSelect = (item) => {
+    const beneficiaryId = getId(item)
+    selectedBeneficiaryId.value = beneficiaryId
+    emit('select-recipient', item)
+  }
+  
+  const badgeClass = (gender) => ({
+    badge: true,
+    male: gender === '남자',
+    female: gender === '여자',
+  })
+  </script>
 
 <style scoped>
 .matching-panel {
@@ -176,17 +221,9 @@ const badgeClass = (gender) => ({
 
 .table-scroll {
   flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
-  max-height: 320px;
-}
-
-.table-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-.table-scroll::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 8px;
+  overflow: visible;
+  padding-right: 0;
+  max-height: none;
 }
 
 .list-table {

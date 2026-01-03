@@ -15,7 +15,7 @@
       </button>
     </div>
 
-    <!-- 요약일지 -->
+    <!-- 요양일지 -->
     <SummaryRecord
       v-if="activeSubTab === 'summary'"
       :monthly-summary-list="monthlySummaryList"
@@ -49,7 +49,7 @@ const props = defineProps({
 })
 
 const subTabs = [
-  { key: 'summary', label: '요약일지' },
+  { key: 'summary', label: '요양일지' },
   { key: 'baseline', label: '기초평가' }
 ]
 

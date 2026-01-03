@@ -16,7 +16,7 @@
         :key="alarm.alarmId" 
         class="notification-item" 
         :class="{ unread: alarm.status === 'SENT' }"
-        @click="$emit('click-item', alarm)"
+        @click="openModal(alarm)"
       >
         <div class="item-left">
           <div class="dot-wrapper">
@@ -30,19 +30,26 @@
         </div>
 
         <button class="close-btn" @click.stop="$emit('read', alarm)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
+          <Icon icon="line-md:close" width="18" height="18" />
         </button>
       </li>
     </ul>
+
+    <!-- 알림 상세 모달 -->
+    <NotificationDetailModal 
+      :isOpen="showModal"
+      :notification="selectedNotification"
+      @close="closeModal"
+      @read="$emit('read', selectedNotification)"
+    />
 
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
+import { Icon } from '@iconify/vue';
+import NotificationDetailModal from './NotificationDetailModal.vue';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -53,7 +60,24 @@ const props = defineProps({
 // read: X버튼 클릭 (삭제)
 // click-item: 리스트 클릭 (이동)
 // view-all: 전체보기 클릭
-defineEmits(['read', 'view-all', 'click-item'])
+const emit = defineEmits(['read', 'view-all', 'click-item', 'mark-read'])
+
+// 모달 상태
+const showModal = ref(false)
+const selectedNotification = ref(null)
+
+const openModal = (alarm) => {
+  selectedNotification.value = alarm;
+  showModal.value = true;
+  if (alarm.status === 'SENT') {
+    emit('mark-read', alarm); 
+  }
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  selectedNotification.value = null;
+};
 
 // 읽지 않은 알림 개수 계산 (status가 'SENT'인 것)
 const unreadCount = computed(() => props.notifications.filter(n => n.status === 'SENT').length)
@@ -223,8 +247,11 @@ const timeAgo = (dateInput) => {
   margin-left: 8px; /* 왼쪽 내용과 간격 */
 }
 
+
 .close-btn:hover {
   color: #4b5563; /* Gray-600 */
   background-color: #f3f4f6;
 }
+
+
 </style>

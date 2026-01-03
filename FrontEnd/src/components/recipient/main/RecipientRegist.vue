@@ -13,12 +13,24 @@
           <div class="grid-2">
             <label class="form-field">
               <span class="form-label">이름</span>
-              <input v-model="form.name" class="form-input" type="text" />
+              <input
+                v-model="form.name"
+                class="form-input"
+                type="text"
+                @input="onKoreanNameInput('name')"
+                @blur="validateKoreanNameField('name', '이름')"
+              />
             </label>
 
             <label class="form-field">
               <span class="form-label">생년월일</span>
-              <input v-model="form.birthdate" class="form-input date-input" type="date" />
+              <input
+                v-model="form.birthdate"
+                class="form-input date-input"
+                type="date"
+                :max="yesterdayStr"
+                @blur="validateBirthdate"
+              />
             </label>
           </div>
 
@@ -31,6 +43,10 @@
                 class="form-input"
                 type="text"
                 placeholder="010-0000-0000"
+                inputmode="numeric"
+                maxlength="13"
+                @input="onPhoneInput('phone')"
+                @blur="validatePhoneField('phone')"
               />
             </label>
 
@@ -60,6 +76,8 @@
                   class="form-input"
                   type="text"
                   placeholder="예: 김민준"
+                  @input="onKoreanNameInput('guardianName')"
+                  @blur="validateKoreanNameField('guardianName', '보호자명')"
                 />
               </label>
 
@@ -81,6 +99,10 @@
                 class="form-input"
                 type="text"
                 placeholder="010-0000-0000"
+                inputmode="numeric"
+                maxlength="13"
+                @input="onPhoneInput('guardianPhone')"
+                @blur="validatePhoneField('guardianPhone')"
               />
             </label>
           </div>
@@ -177,7 +199,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import api from '@/lib/api'
 
 const props = defineProps({
@@ -249,12 +271,8 @@ const resetForm = () => {
 }
 
 /**
- * ✅ 마스터 옵션 API 연동 (백엔드에서 이미 추가했다고 했던 메타 API들)
- * - GET /api/beneficiaries/meta/tags         -> [{id,label}]
- * - GET /api/beneficiaries/meta/risk-factors -> [{id,label}]
- * - GET /api/beneficiaries/meta/care-levels  -> [{id,label,validity,monthlyLimit}]
- *
- * ⚠️ 응답 키가 label이 아니라 name이면 아래 map에서 흡수하도록 해둠.
+ * 마스터 옵션 API 연동 (백엔드에서 이미 추가했다고 했던 메타 API들)
+ * 응답 키가 label이 아니라 name이면 아래 map에서 흡수하도록 해둠.
  */
 const fetchMetaOnce = async () => {
   if (metaLoaded.value) return
@@ -268,7 +286,7 @@ const fetchMetaOnce = async () => {
       api.get('/api/beneficiaries/meta/care-levels')
     ])
 
-    // ✅ 안전하게 배열인지 확인 + label/name 흡수
+    // 안전하게 배열인지 확인 + label/name 흡수
     tagOptions.value = (Array.isArray(tagsRes.data) ? tagsRes.data : [])
       .map((t) => ({ id: t.id, label: t.label ?? t.name ?? t.tag ?? '' }))
       .filter((t) => typeof t.id === 'number' && t.label)
@@ -290,7 +308,7 @@ const fetchMetaOnce = async () => {
   } catch (e) {
     console.error(e)
     metaError.value = true
-    // ✅ 옵션 로드 실패 시 빈 배열 유지(선택 불가 처리)
+    // 옵션 로드 실패 시 빈 배열 유지(선택 불가 처리)
     tagOptions.value = []
     riskOptions.value = []
     careLevelOptions.value = []
@@ -300,7 +318,7 @@ const fetchMetaOnce = async () => {
 }
 
 /**
- * ✅ 상세조회 값을 폼에 채우기
+ * 상세조회 값을 폼에 채우기
  * - tagOptions(마스터)를 받은 뒤에 해야 label->id 매핑이 정확함
  */
 const hydrateFromDetail = (d) => {
@@ -323,7 +341,7 @@ const hydrateFromDetail = (d) => {
   form.careLevelEndDate = d?.careLevelEndDate ?? ''
 
   /**
-   * ✅ 등급 id 세팅
+   * 등급 id 세팅
    * - 상세조회 응답이 careLevel: "1등급" 같은 라벨이면 label->id로 매핑
    * - 만약 백엔드가 careLevelId까지 내려주면 그 값을 우선 사용
    */
@@ -339,7 +357,7 @@ const hydrateFromDetail = (d) => {
   form.careLevelNumber = d?.careLevelNumber ?? ''
 
   /**
-   * ✅ 태그 매핑
+   * 태그 매핑
    * - 상세조회: tags: ["말벗","산책"]
    * - label -> id 매핑은 "서버에서 받은 tagOptions"로 수행(하드코딩 제거)
    */
@@ -349,7 +367,7 @@ const hydrateFromDetail = (d) => {
     .filter((id) => typeof id === 'number')
 
   /**
-   * ✅ 위험요소 매핑
+   * 위험요소 매핑
    * - 상세조회: riskFactors: [{id,name,score}]
    * - id로 바로 세팅(가장 안전)
    */
@@ -366,7 +384,7 @@ const fetchDetail = async () => {
 }
 
 /**
- * ✅ 모달이 열릴 때 동작 순서
+ * 모달이 열릴 때 동작 순서
  * 1) reset
  * 2) 메타(태그/위험요소/등급) 로드
  * 3) 상세 조회 후 프리필
@@ -377,7 +395,7 @@ watch(
     if (!v) return
     resetForm()
 
-    // ✅ 마스터 옵션 먼저 (label->id 매핑 위해 필수)
+    // 마스터 옵션 먼저 (label->id 매핑 위해 필수)
     await fetchMetaOnce()
 
     if (props.beneficiaryId) {
@@ -405,8 +423,16 @@ const toggleRisk = (riskId) => {
 
 const submit = async () => {
   if (!props.beneficiaryId) return
+  // 이름/보호자명 검증
+  if (!validateNameField('name', '이름')) return
+  if (!validateNameField('guardianName', '보호자명')) return
 
-  // ✅ 옵션 로딩 실패 상태면 잘못 저장 위험 → 막기
+  // 전화/생년월일 최종 검증 (저장 직전 한번 더)
+  if (!validatePhoneField('phone')) return
+  if (!validatePhoneField('guardianPhone')) return
+  if (!validateBirthdate()) return
+
+  // 옵션 로딩 실패 상태면 잘못 저장 위험 → 막기
   if (metaError.value) {
     alert('태그/위험요소 옵션을 불러오지 못해 저장할 수 없습니다.\n잠시 후 다시 시도해주세요.')
     return
@@ -414,7 +440,7 @@ const submit = async () => {
 
   saving.value = true
   try {
-    // ✅ 백엔드 컬럼명에 맞춘 payload
+    // 백엔드 컬럼명에 맞춘 payload
     const payload = {
       name: form.name,
       phone: form.phone,
@@ -436,7 +462,7 @@ const submit = async () => {
           ? null
           : Number(form.careLevelNumber),
 
-      // ✅ id 기반 (정합성)
+      // id 기반 (정합성)
       tagIds: form.tagIds,
       riskFactorIds: form.riskFactorIds
     }
@@ -450,6 +476,90 @@ const submit = async () => {
   } finally {
     saving.value = false
   }
+}
+
+// 어제 날짜(YYYY-MM-DD) => date input에서 max로 사용
+const yesterdayStr = computed(() => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+})
+
+// 전화번호: 010-0000-0000 형식만 허용
+const PHONE_REGEX = /^010-\d{4}-\d{4}$/
+
+// 숫자만 뽑아서 010xxxxxxxx 형태로 만들고, 010-xxxx-xxxx로 포맷
+const formatPhone010 = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 11)
+
+  // 010으로 시작하지 않으면 그대로(또는 빈값) 유지: 저장 전 검증에서 걸러냄
+  if (digits.length === 0) return ''
+  if (!digits.startsWith('010')) return digits // 사용자가 이상하게 입력 중인 상태
+
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`
+}
+
+// input에서 자동 하이픈 적용
+const onPhoneInput = (field) => {
+  form[field] = formatPhone010(form[field])
+}
+
+// blur(포커스 아웃) 때 최종 검증
+const validatePhoneField = (field) => {
+  const v = String(form[field] ?? '').trim()
+  if (!v) return true // 빈값 허용 여부는 정책에 따라. (필수면 여기서 false)
+  if (!PHONE_REGEX.test(v)) {
+    alert('연락처는 010-0000-0000 형식만 가능합니다.')
+    form[field] = ''
+    return false
+  }
+  return true
+}
+
+// 생년월일: 오늘보다 반드시 이전
+const validateBirthdate = () => {
+  const v = form.birthdate
+  if (!v) return true // 빈값 허용(필수면 false로)
+  // date input은 YYYY-MM-DD 로 옴
+  const selected = new Date(`${v}T00:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // 반드시 "이전"이어야 함 (오늘도 불가)
+  if (!(selected < today)) {
+    alert('생년월일은 오늘보다 이전 날짜만 가능합니다.')
+    form.birthdate = ''
+    return false
+  }
+  return true
+}
+
+// 한글 + 공백만 허용 (완성형/자모 모두 포함)
+const NAME_REGEX = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z\s]+$/
+
+// 입력 중: 한글/공백만 남기고 제거
+const onKoreanNameInput = (field) => {
+  const v = String(form[field] ?? '')
+// 한글, 자모, 공백 제외 전부 제거
+  form[field] = v.replace(/[^가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z\s]/g, '')
+}
+
+// blur 시 최종 검증
+const validateNameField = (field, label) => {
+  const v = String(form[field] ?? '').trim()
+  if (!v) return true
+
+  if (!NAME_REGEX.test(v)) {
+    alert(`${label}은(는) 한글 또는 영어만 입력 가능합니다.`)
+    form[field] = ''
+    return false
+  }
+  return true
 }
 </script>
 

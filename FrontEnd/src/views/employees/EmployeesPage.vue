@@ -9,7 +9,8 @@ import {
   registerEducation,
   updateCertificateStatus,
   getPendingCertifications,
-  getEmployeeSchedules
+  getActiveEmployeeCount, // [추가]
+  getOnLeaveEmployeeCount // [추가]
 } from '@/api/employee/employeeApi';
 
 // 컴포넌트 import
@@ -19,18 +20,38 @@ import EmployeeEditModal from '@/components/employee/EmployeeEditModal.vue';
 import CertificationApprovalModal from '@/components/employee/CertificationApprovalModal.vue';
 import BulkEducationModal from '@/components/employee/BulkEducationModal.vue';
 import EmployeeRegisterModal from '@/components/employee/EmployeeRegisterModal.vue';
+import EducationAlertBanner from '@/components/employee/EducationAlertBanner.vue'; // [추가]
 
 // --- State ---
 const employees = ref([]); // 서버에서 받아올 직원 목록
 const selectedEmployee = ref(null);
 const searchTerm = ref(''); // 검색어
 const filterRole = ref(''); // 직군 필터
+const activeCount = ref(0); // [추가] 활동중인 직원 수
+const onLeaveCount = ref(0); // [추가] 휴직 중인 직원 수
 
 // 모달 상태
 const isRegisterModalOpen = ref(false);
 const isEditModalOpen = ref(false);
 const showCertApprovalModal = ref(false);
 const showBulkEduModal = ref(false);
+
+// [이동] 서비스 옵션 및 매핑 함수 (Top-Level)
+const serviceOptions = [
+  { id: 1, name: '방문요양' },
+  { id: 2, name: '방문목욕' },
+  { id: 3, name: '방문간호' }
+];
+
+const mapServiceIdsToNames = (ids) => {
+  if (!Array.isArray(ids)) return [];
+  return ids.map(id => {
+    // 문자열 ID가 올 수도 있으므로 비교 시 주의
+    const found = serviceOptions.find(opt => opt.id == id);
+    return found ? found.name : null;
+  }).filter(name => name);
+};
+
 
 // 자격증 승인 대기 목록
 const pendingCertifications = ref([]);
@@ -96,12 +117,12 @@ const fetchEmployees = async () => {
       address: emp.address || '-',
       emergencyContact: emp.emergencyContact || '-',
       career: emp.career || '1년 미만',
+      birth: emp.birth || '', // ★ 생년월일 초기 매핑 추가
       
-      // ▼▼▼ [수정] Postman 응답에는 careers/certificates가 안 보임. 없으면 빈 배열.
       workHistory: emp.careers || [],       
-      certificates: emp.certificates || [], 
+      certificates: emp.certificates || (emp.certificateNames ? emp.certificateNames.split(',').map(s => s.trim()) : []), 
       
-      specialties: emp.specialties || [],
+      specialties: emp.specialties || (emp.serviceTypeNames ? emp.serviceTypeNames.split(',').map(s => s.trim()) : []),
       schedules: [] 
     }));
     
@@ -149,45 +170,100 @@ const fetchPendingCerts = async () => {
   }
 };
 
+// [추가] 활동중인 직원 수 조회
+const fetchActiveCount = async () => {
+  try {
+    const count = await getActiveEmployeeCount();
+    activeCount.value = count;
+  } catch (error) {
+    console.error('활동중 직원 수 로딩 실패:', error);
+  }
+};
+
+// [추가] 휴직 중인 직원 수 조회
+const fetchOnLeaveCount = async () => {
+  try {
+    const count = await getOnLeaveEmployeeCount();
+    onLeaveCount.value = count;
+  } catch (error) {
+    console.error('휴직중 직원 수 로딩 실패:', error);
+  }
+};
+
 // 초기 로딩
 onMounted(() => {
   fetchEmployees();
-  fetchPendingCerts(); // 추가
+  fetchPendingCerts();
+  fetchActiveCount(); // [추가]
+  fetchOnLeaveCount(); // [추가]
 });
 
 // 매핑
 const handleSelect = async (emp) => {
   try {
-    const detailData = await getEmployeeDetail(emp.id);
+    let detailData = await getEmployeeDetail(emp.id);
+
+    // [Safety] API 응답이 { data: { ... } } 형태로 감싸져 있을 경우 처리
+    if (detailData && detailData.data && !detailData.empId && !detailData.id) {
+       detailData = detailData.data;
+    }
 
     selectedEmployee.value = {
       ...detailData,
-      name: detailData.empName || detailData.name,
-      role: detailData.jobName || detailData.role,
-      phone: detailData.tel || detailData.phone,
+      id: detailData.empId || detailData.id || emp.id,
+      name: detailData.empName || detailData.name || emp.name,
+      role: detailData.jobName || detailData.role || emp.role,
+      phone: detailData.tel || detailData.phone || emp.phone,
       
       // 1. 자격증 및 경력
       workHistory: detailData.careers || [],
       certificates: detailData.certificates || [],
       
-      // ▼▼▼ [수정] 보수교육 데이터 매핑 ▼▼▼
+      // 보수교육 데이터 매핑
       educations: detailData.educations || [], 
 
-      // ▼▼▼ [수정] 서비스 타입(객체 배열)을 전문 분야(문자열 배열)로 변환 ▼▼▼
-      // 예: [{id:1, name:'방문요양'}] -> ['방문요양']
+      // 성별 (없으면 기본값 or 기존 emp 데이터)
+      gender: detailData.gender || emp.gender,
+      
+      // ★ 추가 1: 생년월일, 주소 등 주요 정보 명시적 매핑
+      birth: detailData.birth || emp.birth,
+      address: detailData.address || emp.address,
+      hireDate: detailData.hireDate || emp.hireDate,
+
+      // 서비스 타입 매핑
       specialties: detailData.serviceTypes 
         ? detailData.serviceTypes.map(service => service.name) 
-        : (detailData.specialties || []),
+        : (detailData.serviceTypeIds 
+            ? mapServiceIdsToNames(detailData.serviceTypeIds)
+            : (detailData.specialties || [])),
         
       schedules: []
     };
 
     // [수정] 일정 데이터 별도 조회 및 병합 (API 분리됨)
     try {
-      const scheduleData = await getEmployeeSchedules(emp.id);
-      selectedEmployee.value.schedules = scheduleData;
+      const { getEmployeeVisitSchedules, getEmployeeProductSchedules } = await import('@/api/employee/employeeApi');
+      
+      const [visitData, productData] = await Promise.all([
+        getEmployeeVisitSchedules(emp.id).catch(() => []),
+        getEmployeeProductSchedules(emp.id).catch(() => [])
+      ]);
+      
+      const mergedSchedules = [
+        // 방문 요양 일정 (Care)
+        ...(Array.isArray(visitData) 
+            ? visitData.map(item => ({ ...item, type: 'care' })) 
+            : []),
+        
+        // 물품 렌탈 일정 (Rental) -> '복지용구' 등으로 serviceTypeName 식별
+        ...(Array.isArray(productData) 
+            ? productData.map(item => ({ ...item, type: 'rental', serviceTypeName: '복지용구' })) 
+            : [])
+      ];
+      selectedEmployee.value.schedules = mergedSchedules;
     } catch (scheduleError) {
       console.error('일정 로딩 실패:', scheduleError);
+      selectedEmployee.value.schedules = [];
     }
   } catch (error) {
     console.error('상세 정보 로딩 실패:', error);
@@ -203,6 +279,19 @@ const refreshSelectedEmployee = async () => {
 const handleEditClick = () => { 
   if (selectedEmployee.value) isEditModalOpen.value = true; 
 };
+
+// [추가] 알림 배너 클릭 시 해당 직원 선택 및 상세 조회
+const handleAlertClick = async (employeeId) => {
+  // 1. 목록에 있으면 찾아서 선택
+  const target = employees.value.find(e => e.id === employeeId);
+  if (target) {
+    await handleSelect(target);
+  } else {
+    // 2. 목록에 없으면(필터링/페이지네이션 등) ID로 직접 조회 시도
+    await handleSelect({ id: employeeId });
+  }
+};
+
 
 // 직원 등록
 const handleRegisterEmployee = async (payload) => {
@@ -229,10 +318,13 @@ const handleRegisterEmployee = async (payload) => {
     alert('직원이 성공적으로 등록되었습니다.');
     isRegisterModalOpen.value = false; // 모달 닫기
     await fetchEmployees(); // 목록 새로고침
+    await fetchActiveCount(); // 카운트 갱신
+    await fetchOnLeaveCount();
 
   } catch (error) {
     console.error('직원 등록 실패:', error);
-    alert('등록 중 오류가 발생했습니다.');
+    const errorMessage = error.response?.data?.message || '등록 중 오류가 발생했습니다.';
+    alert(`직원 등록 실패: ${errorMessage}`);
   }
 };
 
@@ -243,13 +335,25 @@ const handleUpdateEmployee = async (updatedData) => {
     alert('정보가 수정되었습니다.');
     isEditModalOpen.value = false;
     
-    await fetchEmployees(); // 목록 새로고침
     
-    // 선택된 상세 정보도 업데이트 (API 다시 호출해서 최신화)
-    await handleSelect({ id: updatedData.id });
+    await fetchEmployees(); // 목록 새로고침
+    await fetchActiveCount(); // 카운트 갱신
+    await fetchOnLeaveCount();
+    
+    // 목록에서 방금 수정한 직원 정보(최신)를 찾아서 상세 조회에 넘김
+    const freshEmployee = employees.value.find(e => e.id === updatedData.id);
+    if (freshEmployee) {
+      // 1. 목록에 있으면 그 최신 객체를 기반으로 상세 조회
+      await handleSelect(freshEmployee);
+    } else {
+      // 2. 필터 등으로 목록에 안 보이면 ID로만 조회
+      await handleSelect({ id: updatedData.id });
+    }
+    
   } catch (error) {
     console.error('수정 실패:', error);
-    alert('수정 중 오류가 발생했습니다.');
+    const errorMessage = error.response?.data?.message || '수정 중 오류가 발생했습니다.';
+    alert(`직원 수정 실패: ${errorMessage}`);
   }
 };
 
@@ -269,11 +373,10 @@ const handleCertApprove = async (id) => {
 };
 
 const handleCertReject = async (id) => {
-  const reason = prompt('반려 사유를 입력하세요:');
-  if (reason === null) return;
-  
+  if (!confirm('반려하시겠습니까?')) return;
+
   try {
-    await updateCertificateStatus(id, 'REJECTED', reason);
+    await updateCertificateStatus(id, 'REJECTED');
     alert('반려되었습니다.');
     await fetchPendingCerts();
     await fetchEmployees();
@@ -283,49 +386,15 @@ const handleCertReject = async (id) => {
   }
 };
 
-const handleBulkEduSubmit = async ({ ids, data }) => {
-  const { targetCertName, ...eduPayload } = data;
-  
-  if (!targetCertName) {
-    alert('대상 자격증 이름을 입력해주세요.');
-    return;
-  }
-
-  let successCount = 0;
-  let failCount = 0;
-
-  for (const empId of ids) {
-    try {
-      // 직원 찾기
-      const employee = employees.value.find(e => e.id === empId);
-      if (!employee) continue;
-
-      // 자격증 찾기 (이름 부분 일치)
-      const targetCert = employee.certificates.find(c => 
-        (c.certificateName || c.name || '').includes(targetCertName)
-      );
-
-      if (targetCert && (targetCert.id || targetCert.certificateId)) {
-        // 이미 eduName 등이 eduPayload에 포함되어 있으므로 그대로 전달
-        await registerEducation(targetCert.id || targetCert.certificateId, eduPayload);
-        successCount++;
-      } else {
-        console.warn(`[Bulk] ${employee.name}님에게 '${targetCertName}' 자격증이 없습니다.`);
-        failCount++;
-      }
-    } catch (err) {
-      console.error(err);
-      failCount++;
-    }
-  }
-
-  alert(`총 ${ids.length}명 중 ${successCount}명 성공, ${failCount}명 실패 (자격증 미보유 등).`);
+const handleBulkEduSubmit = async () => {
   showBulkEduModal.value = false;
   
-  // 현재 보고 있는 직원 정보 갱신
-  if (selectedEmployee.value && ids.includes(selectedEmployee.value.id)) {
+  // 변경 사항 반영을 위해 현재 보고 있는 직원 정보 갱신
+  if (selectedEmployee.value) {
     refreshSelectedEmployee();
   }
+  // 필요하다면 전체 목록도 갱신 (예: 통계 등)
+  // await fetchEmployees(); 
 };
 </script>
 
@@ -371,15 +440,26 @@ const handleBulkEduSubmit = async ({ ids, data }) => {
       <div class="stat-card">
         <div>
           <span class="stat-label text-green">활동중</span>
-          <p class="stat-value text-green">{{ employees.filter(e => e.status === '활동중').length }}명</p>
+          <p class="stat-value text-green">{{ activeCount }}명</p>
         </div>
         <div class="stat-icon bg-green">
           <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-12 12-4-4"/></svg>
         </div>
       </div>
+      <div class="stat-card">
+        <div>
+          <span class="stat-label text-orange">휴직</span>
+          <p class="stat-value text-orange">{{ onLeaveCount }}명</p>
+        </div>
+        <div class="stat-icon bg-orange">
+          <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+      </div>
     </div>
 
 
+    <!-- 보수교육 알림 배너 추가 -->
+    <EducationAlertBanner @select-employee="handleAlertClick" />
 
     <div class="main-grid">
       <EmployeeList 
@@ -419,7 +499,6 @@ const handleBulkEduSubmit = async ({ ids, data }) => {
 
     <BulkEducationModal 
       :isOpen="showBulkEduModal"
-      :employees="employees"
       @close="showBulkEduModal = false"
       @submit="handleBulkEduSubmit"
     />
@@ -455,9 +534,11 @@ const handleBulkEduSubmit = async ({ ids, data }) => {
 .stat-label { font-size: 14px; color: #64748b; font-weight: 500; }
 .stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; color: #1e293b; }
 .text-green { color: #00a63e; }
+.text-orange { color: #d97706; } /* [추가] */
 .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
 .bg-gray { background-color: #f1f5f9; color: #64748b; }
 .bg-green { background-color: #dcfce7; color: #166534; }
+.bg-orange { background-color: #ffedd5; color: #9a3412; } /* [추가] */
 .flex { display: flex; }
 .items-center { align-items: center; }
 .gap-2 { gap: 8px; }

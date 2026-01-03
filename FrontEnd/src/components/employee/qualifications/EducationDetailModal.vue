@@ -1,6 +1,6 @@
 <!-- 보수교육 상세 모달 -->
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -8,6 +8,23 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+
+// 키보드 이벤트 핸들러
+const handleKeydown = (e) => {
+  if (!props.isOpen) return;
+
+  if (e.key === 'Escape' || e.key === 'Enter') {
+    emit('close');
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
@@ -52,19 +69,7 @@ const emit = defineEmits(['close']);
           </div>
         </div>
 
-        <div class="file-box" v-if="data.fileName">
-          <span class="label mb-2 block">첨부파일</span>
-          <div class="file-row">
-            <div class="file-name">
-              <svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-              {{ data.fileName }}
-            </div>
-            <button class="btn-download">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              다운로드
-            </button>
-          </div>
-        </div>
+
       </div>
 
       <div class="modal-footer">

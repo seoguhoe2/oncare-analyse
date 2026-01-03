@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import axios from '@/lib/api';
 
 const props = defineProps({
   employees: { type: Array, required: true },
@@ -12,7 +13,29 @@ const searchTerm = ref('');
 const filterRole = ref('');
 const filterStatus = ref('');
 const filterCert = ref('');
+const filterServiceType = ref(''); // [추가] 서비스 유형 필터
 const currentPage = ref(1);
+
+const filterOptions = ref({
+  jobs: [],
+  certificates: [],
+  serviceTypes: [] // [추가]
+});
+
+const fetchFilters = async () => {
+  try {
+    const response = await axios.get('/api/employees/filters');
+    filterOptions.value.jobs = response.data.jobs;
+    filterOptions.value.certificates = response.data.certificates;
+    filterOptions.value.serviceTypes = response.data.serviceTypes || []; // [추가]
+  } catch (error) {
+    console.error("필터 정보를 불러오지 못했습니다.", error);
+  }
+};
+
+onMounted(() => {
+  fetchFilters();
+});
 
 // 페이징 처리 부분
 const itemsPerPage = 8;
@@ -22,9 +45,23 @@ const filteredEmployees = computed(() => {
     const matchesSearch = emp.name.includes(searchTerm.value) || emp.phone.includes(searchTerm.value);
     const matchesRole = !filterRole.value || emp.role === filterRole.value;
     const matchesStatus = !filterStatus.value || emp.status === filterStatus.value;
-    const matchesCert = !filterCert.value || (emp.certifications && emp.certifications.includes(filterCert.value));
     
-    return matchesSearch && matchesRole && matchesStatus && matchesCert;
+    // 자격증 필터링 로직 수정 (속성명 불일치 및 객체 배열 대응)
+    const matchesCert = !filterCert.value || (emp.certificates && emp.certificates.some(c => {
+      const certName = (typeof c === 'string') ? c : (c.name || c.certificateName || '');
+      return certName === filterCert.value;
+    }));
+
+    // [추가] 서비스 유형 필터링
+    const matchesService = !filterServiceType.value || (emp.specialties && emp.specialties.some(s => {
+      // s가 문자열이면 바로 비교, 객체면 id나 name 비교 (API 필터가 id로 올 경우 name으로 매핑 필요할 수도 있음)
+      // 현재 필터 옵션은 id, name 객체임. Dropdown value를 무엇으로 할지에 따라 다름.
+      // 보통 화면 표시는 한글 이름이므로 이름 매칭이 안전함.
+      const sName = (typeof s === 'string') ? s : (s.name || '');
+      return sName === filterServiceType.value;
+    }));
+    
+    return matchesSearch && matchesRole && matchesStatus && matchesCert && matchesService;
   });
 });
 
@@ -35,8 +72,19 @@ const paginatedEmployees = computed(() => {
   return filteredEmployees.value.slice(start, end);
 });
 
-const selectEmployee = (emp) => emit('select', emp);
+const hasActiveFilters = computed(() => {
+  return searchTerm.value || filterRole.value || filterStatus.value || filterCert.value || filterServiceType.value;
+});
 
+const resetFilters = () => {
+  searchTerm.value = '';
+  filterRole.value = '';
+  filterStatus.value = '';
+  filterCert.value = '';
+  filterServiceType.value = '';
+};
+
+const selectEmployee = (emp) => emit('select', emp);
 const getStatusClass = (status) => {
   if (status === '활동중') return 'status-active';
   if (status === '휴가') return 'status-vacation';
@@ -52,25 +100,38 @@ const getStatusClass = (status) => {
         <input v-model="searchTerm" type="text" placeholder="이름, 전화번호 검색" />
       </div>
 
+      <select v-model="filterServiceType" class="dropdown">
+        <option value="">전체 서비스</option>
+        <option v-for="service in filterOptions.serviceTypes" :key="service.id" :value="service.name">
+          {{ service.name }}
+        </option>
+      </select>
+
       <select v-model="filterRole" class="dropdown">
         <option value="">전체 직군</option>
-        <option value="센터장">센터장</option>
-        <option value="요양보호사">요양보호사</option>
+        <option v-for="job in filterOptions.jobs" :key="job.id || job" :value="job.name || job">
+          {{ job.name || job }}
+        </option>
       </select>
 
       <select v-model="filterStatus" class="dropdown">
         <option value="">전체 상태</option>
-        <option value="활동중">활동중</option>
-        <option value="휴가">휴가</option>
+        <option value="재직">재직</option>
         <option value="휴직">휴직</option>
+        <option value="퇴사">퇴사</option>
       </select>
 
       <select v-model="filterCert" class="dropdown">
         <option value="">전체 자격증</option>
-        <option value="요양보호사">요양보호사</option>
-        <option value="사회복지사 1급">사회복지사 1급</option>
-        <option value="간호조무사">간호조무사</option>
+        <option v-for="cert in filterOptions.certificates" :key="cert.id || cert" :value="cert.name || cert">
+          {{ cert.name || cert }}
+        </option>
       </select>
+
+      <button v-if="hasActiveFilters" @click="resetFilters" class="reset-btn">
+        <svg class="icon-sm" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        필터 초기화
+      </button>
     </div>
 
     <div class="employee-list">
@@ -114,8 +175,8 @@ const getStatusClass = (status) => {
 .filter-area { padding: 16px; border-bottom: 1px solid #f0f0f0; display: flex; flex-direction: column; gap: 10px; }
 .search-box { position: relative; }
 .search-icon { position: absolute; left: 10px; top: 10px; width: 16px; color: #999; }
-.search-box input { width: 100%; padding: 8px 8px 8px 36px; border: 1px solid #ddd; border-radius: 6px; outline: none; }
-.dropdown { padding: 8px; border: 1px solid #ddd; border-radius: 6px; width: 100%; }
+.search-box input { width: 100%; padding: 8px 8px 8px 36px; border: 1px solid #ddd; border-radius: 6px; outline: none; box-sizing: border-box; }
+.dropdown { padding: 8px; border: 1px solid #ddd; border-radius: 6px; width: 100%; box-sizing: border-box; }
 .employee-list { flex: 1; overflow-y: auto; padding: 8px; }
 .employee-item { padding: 12px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
 .employee-item:hover { background-color: #f9fafb; }
@@ -135,4 +196,6 @@ const getStatusClass = (status) => {
 .icon { width: 18px; height: 18px; }
 .icon-sm { width: 14px; height: 14px; }
 .empty-list { text-align: center; padding: 20px; color: #999; font-size: 13px; }
+.reset-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px; background-color: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; box-sizing: border-box; }
+.reset-btn:hover { background-color: #e5e7eb; color: #111827; }
 </style>

@@ -1,4 +1,5 @@
 <script setup>
+const emit = defineEmits(['openModal']);
 </script>
 
 <template>
@@ -7,8 +8,9 @@
       <h1>대시보드</h1>
       <p>복지용구 렌탈서비스 & 방문요양 현황</p>
     </div>
-    <button class="custom-btn">
-      ⚙️ 대시보드 커스터마이징
+    
+    <button class="custom-btn" @click="$emit('openModal')">
+      대시보드 설정
     </button>
   </header>
 </template>
@@ -37,7 +39,7 @@
 }
 
 .custom-btn {
-  background-color: #4CAF50; /* 이미지의 초록색 */
+  background-color: #10B981; /* 요청하신 디자인과 어울리는 초록색 */
   color: white;
   border: none;
   padding: 10px 20px;
@@ -51,6 +53,6 @@
 }
 
 .custom-btn:hover {
-  background-color: #43a047;
+  background-color: #059669;
 }
 </style>

@@ -1,3 +1,4 @@
+<!-- src/components/recipient/longcare/LongCare.vue -->
 <template>
   <div class="card longcare-wrap">
     <header class="longcare-header">
@@ -10,18 +11,19 @@
           type="button"
           class="range-btn"
           :class="{ active: activeRange === btn.key }"
-          @click="activeRange = btn.key"
+          :disabled="isNotExtendedMode && btn.key !== 'notExtended'"
+          @click="onClickRange(btn.key)"
         >
           {{ btn.label }}
         </button>
       </div>
     </header>
 
-    <!-- 상태 -->
     <div v-if="loading" class="state">불러오는 중...</div>
     <div v-else-if="errorMsg" class="state error">{{ errorMsg }}</div>
 
-    <div v-else class="table-wrap">
+    <!-- 스크롤은 테이블 영역만 -->
+    <div v-else class="table-wrap scroll-wrapper">
       <table>
         <thead>
           <tr>
@@ -34,8 +36,9 @@
         </thead>
 
         <tbody>
+          <!-- 현재 페이지 데이터만 렌더링 -->
           <tr
-            v-for="row in filteredItems"
+            v-for="row in pagedItems"
             :key="row.expirationId"
             :class="[
               'clickable-row',
@@ -47,9 +50,7 @@
             <td>{{ row.beneficiaryName }}</td>
             <td>{{ row.endDate }}</td>
             <td>{{ row.careWorkerName || '-' }}</td>
-            <td>
-              <span class="dday-pill">{{ row.ddayLabel || '-' }}</span>
-            </td>
+            <td><span class="dday-pill">{{ row.ddayLabel || '-' }}</span></td>
             <td>
               <span
                 v-if="String(row.noticeLabel || '').startsWith('완료')"
@@ -69,6 +70,31 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 하단 중앙 페이징 (페이지가 2 이상일 때만 표시) -->
+    <div v-if="!loading && !errorMsg && totalPages > 1" class="bottom-pager">
+      <button
+        type="button"
+        class="page-btn"
+        :disabled="page <= 0"
+        @click="page--"
+      >
+        이전
+      </button>
+
+      <span class="page-info">
+        {{ page + 1 }} / {{ totalPages }}
+      </span>
+
+      <button
+        type="button"
+        class="page-btn"
+        :disabled="page >= totalPages - 1"
+        @click="page++"
+      >
+        다음
+      </button>
+    </div>
   </div>
 </template>
 
@@ -76,53 +102,48 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import api from '@/lib/api'
 
-/**
- * ✅ v-model:selected-id 로 사용하기
- * - selectedId = expirationId
- */
 const props = defineProps({
-  items: { // (옵션) 외부에서 주입도 가능하게 열어둠
-    type: Array,
-    default: () => []
-  },
-  selectedId: {
-    type: [Number, String, null],
-    default: null
-  }
+  selectedId: { type: [Number, String, null], default: null },
+  refreshKey: { type: Number, default: 0 },
+
+  /**
+   * 상세에서 올라온 변경 이벤트
+   * 예) { type:'extendsStatus', expirationId: 3, extendsStatus:'N' }
+   */
+  lastChange: { type: Object, default: null }
 })
-const emit = defineEmits(['update:selectedId', 'select', 'loaded'])
+const emit = defineEmits(['update:selectedId'])
 
 const rangeButtons = [
   { key: 'all', label: '전체' },
   { key: '45', label: '45일 이내' },
   { key: '60', label: '60일 이내' },
-  { key: '90', label: '90일 이내' }
+  { key: '90', label: '90일 이내' },
+  { key: 'notExtended', label: '등급 미연장 리스트' }
 ]
+
 const activeRange = ref('all')
+const isNotExtendedMode = computed(() => activeRange.value === 'notExtended')
 
 const loading = ref(false)
 const errorMsg = ref('')
 
-/**
- * ✅ 서버에서 받아온 원본 리스트
- * - props.items 가 있으면 그걸 우선 사용
- * - 없으면 API 호출해서 채움
- */
-const serverItems = ref([])
+/**  실제 렌더링 목록 */
+const displayItems = ref([])
 
+/**  페이징 상태 */
+const page = ref(0)
+const pageSize = ref(10)
+
+/** D-day 파싱 */
 const parseDday = (ddayLabel) => {
-  // "D-40" => 40
   const s = String(ddayLabel || '').trim()
   const m = s.match(/D-\s*(\d+)/i)
   return m ? Number(m[1]) : 999999
 }
 
-/**
- * ✅ 백엔드 응답 -> 화면에서 쓰는 row 형태로 정규화
- */
 const normalized = computed(() => {
-  const list = (props.items && props.items.length) ? props.items : serverItems.value
-  return (list || []).map((it) => ({
+  return (displayItems.value || []).map((it) => ({
     expirationId: it.expirationId,
     beneficiaryName: it.beneficiaryName,
     endDate: it.endDate,
@@ -130,23 +151,46 @@ const normalized = computed(() => {
     ddayLabel: it.ddayLabel,
     ddayNum: parseDday(it.ddayLabel),
     noticeLabel: it.noticeLabel,
-    extendsStatus: it.extendsStatus,
-    outboundStatus: it.outboundStatus,
-    noticeCount: it.noticeCount,
-    lastNoticeDate: it.lastNoticeDate
+    extendsStatus: it.extendsStatus
   }))
 })
 
+/** 필터 적용 결과 */
 const filteredItems = computed(() => {
-  // ✅ 백엔드가 extends_status가 NULL 또는 'Y'만 내려주도록 되어 있으므로
-  // 프론트에서 굳이 한번 더 제외할 필요는 없지만,
-  // 혹시 props.items로 들어오는 경우를 대비해 안전필터만 추가
-  let list = normalized.value.filter((i) => i.extendsStatus !== 'N')
+  let list = normalized.value
+
+  if (isNotExtendedMode.value) {
+    return list.filter((i) => i.extendsStatus === 'N')
+  }
+
+  list = list.filter((i) => i.extendsStatus !== 'N')
 
   if (activeRange.value === 'all') return list
   const limit = Number(activeRange.value)
   return list.filter((i) => i.ddayNum <= limit)
 })
+
+/**  총 페이지 */
+const totalPages = computed(() => {
+  const cnt = filteredItems.value.length
+  return cnt === 0 ? 0 : Math.ceil(cnt / pageSize.value)
+})
+
+/** 현재 페이지에 보여줄 항목 */
+const pagedItems = computed(() => {
+  const start = page.value * pageSize.value
+  return filteredItems.value.slice(start, start + pageSize.value)
+})
+
+/** page 범위 보정(필터/데이터 변경으로 페이지가 튀는 것 방지) */
+watch(
+  () => [filteredItems.value.length, totalPages.value],
+  () => {
+    if (page.value > 0 && page.value >= totalPages.value) {
+      page.value = Math.max(totalPages.value - 1, 0)
+    }
+  }
+)
 
 const ddayClass = (ddayNum) => {
   if (ddayNum <= 45) return 'row-red'
@@ -157,42 +201,102 @@ const ddayClass = (ddayNum) => {
 
 const selectRow = (row) => {
   emit('update:selectedId', row.expirationId)
-  emit('select', row) // ✅ 부모가 row 자체도 받고 싶으면 사용
 }
 
+/** notExtended 토글 */
+const onClickRange = (key) => {
+  if (key === 'notExtended') {
+    activeRange.value = activeRange.value === 'notExtended' ? 'all' : 'notExtended'
+  } else {
+    activeRange.value = key
+  }
+}
+
+/** 서버 조회 */
 const fetchList = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const { data } = await api.get('/api/care-level/expirations')
-    serverItems.value = data?.items ?? []
-    emit('loaded', serverItems.value)
+    const params = {}
+    if (isNotExtendedMode.value) params.extendsStatus = 'N'
+
+    const { data } = await api.get('/api/care-level/expirations', { params })
+    displayItems.value = data?.items ?? []
   } catch (e) {
     console.error(e)
     errorMsg.value = '목록을 불러오지 못했습니다.'
-    serverItems.value = []
+    displayItems.value = []
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  // props.items로 받지 않는 경우만 API 호출
-  if (!props.items || props.items.length === 0) fetchList()
-})
+onMounted(fetchList)
 
-// 부모에서 “완료 처리 후 목록 새로고침” 하고 싶을 때 쓸 수 있게 watch 예시
+/** 필터 전환 시 서버 재조회 + 선택 해제 + 페이지 초기화 */
 watch(
-  () => props.items,
-  (v) => {
-    // 외부 items가 주입되면 API list 대신 그걸 표시
-    // (별도 로직 없음)
+  () => activeRange.value,
+  async () => {
+    emit('update:selectedId', null)
+    page.value = 0
+    await fetchList()
   }
+)
+
+/** refreshKey 올라오면(완료/삭제 등) 서버 재조회 + page 보정 */
+watch(
+  () => props.refreshKey,
+  async () => {
+    await fetchList()
+  }
+)
+
+/**
+ * 핵심: extendsStatus 변경 즉시 반영
+ * - 연장예정 목록에서 N 되면 즉시 제거
+ * - 미연장 목록에서 Y 되면 즉시 제거
+ */
+watch(
+  () => props.lastChange,
+  (chg) => {
+    if (!chg || chg.type !== 'extendsStatus') return
+
+    const id = Number(chg.expirationId)
+    const next = String(chg.extendsStatus || '').toUpperCase() // 'N' or 'Y'
+
+    // 1) 로컬 항목 갱신
+    displayItems.value = (displayItems.value || []).map((it) => {
+      if (Number(it.expirationId) !== id) return it
+      return { ...it, extendsStatus: next }
+    })
+
+    // 2) 현재 모드에 따라 즉시 제거
+    if (isNotExtendedMode.value) {
+      if (next !== 'N') {
+        displayItems.value = displayItems.value.filter((it) => Number(it.expirationId) !== id)
+        if (Number(props.selectedId) === id) emit('update:selectedId', null)
+      }
+    } else {
+      if (next === 'N') {
+        displayItems.value = displayItems.value.filter((it) => Number(it.expirationId) !== id)
+        if (Number(props.selectedId) === id) emit('update:selectedId', null)
+      }
+    }
+
+    // 변경 후 페이지 보정
+    if (page.value > 0 && page.value >= totalPages.value) {
+      page.value = Math.max(totalPages.value - 1, 0)
+    }
+  },
+  { deep: true }
 )
 </script>
 
 <style scoped>
+/* (네 스타일 그대로) */
 .longcare-wrap {
+  box-sizing: border-box;
+  min-width: 0;
   background-color: #fff;
   border-radius: 12px;
   padding: 14px 16px;
@@ -208,6 +312,7 @@ watch(
   margin: 0;
   font-size: 15px;
 }
+
 .filters {
   display: flex;
   gap: 4px;
@@ -224,8 +329,11 @@ watch(
   background-color: #111827;
   color: #fff;
 }
+.range-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
-/* 상태 */
 .state {
   padding: 10px 0;
   font-size: 12px;
@@ -235,10 +343,25 @@ watch(
   color: #b91c1c;
 }
 
-/* 테이블 */
-.table-wrap {
+/* 스크롤바 */
+.scroll-wrapper {
+  max-height: 360px;
+  overflow-y: auto;
   overflow-x: auto;
+  padding-right: 4px;
 }
+.scroll-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-wrapper::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 4px;
+}
+.scroll-wrapper::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -260,19 +383,24 @@ tbody td {
   padding: 16px 10px;
 }
 
-/* 행 색 */
-.row-red { background-color: #fef2f2; }
-.row-yellow { background-color: #fff7ed; }
-.row-normal { background-color: #fefce8; }
+.row-red {
+  background-color: #fef2f2;
+}
+.row-yellow {
+  background-color: #fff7ed;
+}
+.row-normal {
+  background-color: #fefce8;
+}
 
-/* 선택 가능 행 */
-.clickable-row { cursor: pointer; }
+.clickable-row {
+  cursor: pointer;
+}
 .clickable-row.is-active {
   outline: 2px solid rgba(34, 197, 94, 0.6);
   outline-offset: -2px;
 }
 
-/* D-day / 상태 */
 .dday-pill {
   display: inline-block;
   padding: 2px 8px;
@@ -294,5 +422,37 @@ tbody td {
 .status-pill.pending {
   background-color: #f3f4f6;
   color: #6b7280;
+}
+
+/* 하단 중앙 페이징 */
+.bottom-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 6px 0;
+}
+
+.page-info {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.page-btn {
+  border: none;
+  background: #f3f4f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.page-btn:hover {
+  background: #e5e7eb;
+}
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

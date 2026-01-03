@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.query.dto.ApiResponse;
 import org.ateam.oncare.careworker.query.dto.CareLogDetailDto;
 import org.ateam.oncare.careworker.query.dto.CareLogListDto;
 import org.ateam.oncare.careworker.query.service.CareLogQueryService;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,8 +21,8 @@ public class CareLogQueryController {
     // 1. 요양일지 목록 조회 (요양보호사별)
     @GetMapping
     public ApiResponse<List<CareLogListDto>> getCareLogList(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId) {
-        List<CareLogListDto> data = careLogQueryService.getCareLogList(careWorkerId);
+            @AuthenticationPrincipal EmployeeImpl employee) {
+        List<CareLogListDto> data = careLogQueryService.getCareLogList(employee.getId());
         return ApiResponse.success(data);
     }
 

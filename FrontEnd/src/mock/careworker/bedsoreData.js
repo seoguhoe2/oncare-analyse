@@ -1,4 +1,4 @@
-// 욕창위험도 평가 데이터
+// 욕창위험도 평가 데이터 (Braden Scale)
 export const bedsoreAssessment = {
   title: '욕창위험도 평가',
   code: 'BEDSORE',
@@ -62,18 +62,21 @@ export const bedsoreAssessment = {
     {
       code: 'friction',
       label: '마찰력과 전단력',
+      // 중요: 4점 항목이 없으므로 마지막에 null 추가하여 칸 비우기
       choices: [
         { score: 1, label: '문제 있음' },
         { score: 2, label: '잠재적 문제' },
-        { score: 3, label: '문제 없음' }
+        { score: 3, label: '문제 없음' },
+        null 
       ]
     }
   ],
   grading: {
     ranges: [
-      { min: 19, max: 23, label: '낮음(위험 없음)', color: 'green' },
-      { min: 13, max: 18, label: '중간(약간~중도 위험)', color: 'yellow' },
-      { min: 0, max: 12, label: '매우 높음(위험 매우 높음)', color: 'red' }
+      // 욕창은 점수가 높을수록 위험도가 낮음 (색상 반대 주의)
+      { min: 19, max: 23, label: '낮음(위험 없음)', color: 'green', bg: '#f0fdf4', border: '#bbf7d0', badgeClass: 'safe' },
+      { min: 13, max: 18, label: '중간(약간~중도 위험)', color: 'orange', bg: '#fffaf0', border: '#fbd38d', badgeClass: 'caution' },
+      { min: 0, max: 12, label: '매우 높음(위험 매우 높음)', color: 'red', bg: '#fff5f5', border: '#feb2b2', badgeClass: 'danger' }
     ],
     comment_field: true
   }

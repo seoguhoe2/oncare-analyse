@@ -40,11 +40,10 @@
               </div>
 
               <div v-if="isConfirmed" class="head-right">
-                <button class="head-text-btn" type="button" @click="onClickEdit">
+                <button class="action-btn edit" type="button" @click="onClickEdit">
                   일정 수정
                 </button>
-                <span class="head-divider">/</span>
-                <button class="head-text-btn" type="button" @click="onClickDelete">
+                <button class="action-btn delete" type="button" @click="onClickDelete">
                   일정 삭제
                 </button>
               </div>
@@ -511,7 +510,7 @@
   </script>
 
 <style scoped>
-  .detail-panel {
+.detail-panel {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -682,19 +681,35 @@
 .head-right {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #101828;
+  gap: 10px;
 }
 
-.head-text-btn {
-  border: none;
-  background: transparent;
-  padding: 0;
+.action-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
   cursor: pointer;
-  font: inherit;
-  color: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn.edit {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: #f0fdf4;
+  color: #166534;
+}
+
+
+.action-btn.delete {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: #fff1f2;
+  color: #b91c1c;
 }
 
 .head-divider {

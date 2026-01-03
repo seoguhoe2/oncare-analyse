@@ -39,7 +39,7 @@ const tabs = [
     label: '요양일지',
     route: 'activity-care',
     to: '/activity',
-    title: '활동일지',
+    title: '요양일지',
     subtitle: '방문 활동을 기록하고 관리합니다',
   },
   {

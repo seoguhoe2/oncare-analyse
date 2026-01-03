@@ -1,9 +1,21 @@
 <!-- src/components/recipient/RecipientList.vue -->
 <template>
   <div class="filter-card">
-    <!-- 검색 -->
-    <div class="search-box">
-      <input v-model="searchText" type="text" placeholder="이름 검색..." />
+    <!--  검색 + 전체필터 초기화(우측) -->
+    <div class="search-row">
+      <div class="search-box">
+        <input v-model="searchText" type="text" placeholder="이름 검색..." />
+      </div>
+
+      <!--  빨간 박스 위치: 초기화 버튼 -->
+      <button
+        type="button"
+        class="reset-btn"
+        :disabled="!hasAnyFilter || loading"
+        @click="resetAllFilters"
+      >
+        전체 초기화
+      </button>
     </div>
 
     <!-- 1차 필터 (서비스 상태) -->
@@ -82,7 +94,7 @@
               <span class="name">{{ r.name }}</span>
 
               <div class="badge-row">
-                <!--  서비스 상태 뱃지(목록에서 바로 표시) -->
+                <!-- 서비스 상태 뱃지 -->
                 <span class="badge state" :class="stateClass(r.status)">
                   {{ r.status || '-' }}
                 </span>
@@ -106,7 +118,6 @@
                 장기요양 {{ formatCareLevel(r.careLevel) }}
               </span>
 
-              <!--  서비스타입 null 처리 -->
               <span class="tag tag-service">
                 {{ serviceTypeLabel(r.serviceType) }}
               </span>
@@ -162,7 +173,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch, defineExpose  } from 'vue'
+import { computed, onMounted, ref, watch, defineExpose } from 'vue'
 import api from '@/lib/api'
 
 const props = defineProps({
@@ -203,7 +214,7 @@ const riskLevelId = computed(() => {
 
 const careLevelId = computed(() => {
   if (!careLevelFilter.value) return undefined
-  if (careLevelFilter.value === '인지지원등급') return 6 
+  if (careLevelFilter.value === '인지지원등급') return 6
   const n = Number(careLevelFilter.value)
   return Number.isFinite(n) ? n : undefined
 })
@@ -245,10 +256,39 @@ const fetchBeneficiaries = async () => {
   }
 }
 
-/*  외부에서 호출 가능하게 노출 */
+/* 외부에서 호출 가능하게 노출 */
 defineExpose({
   refresh: fetchBeneficiaries
 })
+
+/** 전체필터 초기화 버튼 상태 */
+const hasAnyFilter = computed(() => {
+  return (
+    !!searchText.value.trim() ||
+    !!statusFilter.value ||
+    !!riskFilterLabel.value ||
+    !!careLevelFilter.value ||
+    sortKey.value !== 'name' ||
+    direction.value !== 'ASC' ||
+    pageSize.value !== 10
+  )
+})
+
+/**  전체 초기화 */
+const resetAllFilters = () => {
+  searchText.value = ''
+  statusFilter.value = ''
+  riskFilterLabel.value = ''
+  careLevelFilter.value = ''
+
+  sortKey.value = 'name'
+  direction.value = 'ASC'
+
+  pageSize.value = 10
+  page.value = 0
+
+  fetchBeneficiaries()
+}
 
 /** 검색 디바운스 */
 let searchTimer = null
@@ -289,18 +329,75 @@ const formatCareLevel = (v) => {
   return s.includes('등급') ? s : `${s}등급`
 }
 
-//  요청사항 1: null 문구 처리
+// null 문구 처리
 const managerLabel = (name) => (name && String(name).trim() ? name : '담당보호사 없음')
 const serviceTypeLabel = (v) => (v && String(v).trim() ? v : '제공받는 서비스 없음')
 </script>
 
 <style scoped>
-/* 기존 스타일 유지 + badge-row/state 뱃지만 추가 */
-.filter-card { background-color: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04); }
-.search-box { margin-bottom: 6px; }
-.search-box input { width: 100%; padding: 4px 8px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px; box-sizing: border-box; }
+/* 기존 스타일 유지 + search-row 추가 */
+
+.filter-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+/*  검색 input + 초기화 버튼 한 줄 */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.search-box {
+  flex: 1;            /*  input 영역이 남는 공간만 차지 */
+  min-width: 0;       /*  flex에서 input 줄어들 수 있게 */
+}
+
+.search-box input {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+/*  초기화 버튼 (빨간 박스 자리) */
+.reset-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reset-btn:hover {
+  background: #e5e7eb;
+}
+.reset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .filter-group { margin-top: 8px; }
-.filter-header { width: 100%; border: none; background: transparent; padding: 4px 2px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; color: #6b7280; }
+.filter-header {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 4px 2px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: #6b7280;
+}
 .filter-header.no-btn { cursor: default; }
 .filter-body { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
 .filter-body select { width: 100%; padding: 4px 8px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px; }
@@ -336,7 +433,7 @@ const serviceTypeLabel = (v) => (v && String(v).trim() ? v : '제공받는 서�
 .status.risk-mid  { background-color: #fef3c7; color: #92400e; }
 .status.risk-low  { background-color: #e0f2fe; color: #1d4ed8; }
 
-/*  서비스 상태 뱃지 */
+/* 서비스 상태 뱃지 */
 .state { background-color: #f3f4f6; color: #374151; }
 .state-on { background-color: #dcfce7; color: #15803d; }
 .state-off { background-color: #e5e7eb; color: #374151; }

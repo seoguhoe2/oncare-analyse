@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.command.dto.CreateBasicEvaluationRequest;
 import org.ateam.oncare.careworker.command.dto.UpdateBasicEvaluationRequest;
 import org.ateam.oncare.careworker.command.service.BasicEvaluationCommandService;
 import org.ateam.oncare.careworker.query.dto.ApiResponse;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,10 +20,10 @@ public class BedsoreEvaluationCommandController {
     // 1. 욕창위험도 평가 작성
     @PostMapping
     public ApiResponse<Void> createBedsoreEvaluation(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId,
+            @AuthenticationPrincipal EmployeeImpl employee,
             @RequestBody CreateBasicEvaluationRequest request) {
         request.setEvalType(EVAL_TYPE);
-        basicEvaluationCommandService.createBasicEvaluation(careWorkerId, request);
+        basicEvaluationCommandService.createBasicEvaluation(employee.getId(), request);
         return ApiResponse.success(null);
     }
 

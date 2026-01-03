@@ -54,12 +54,8 @@ onMounted(async () => {
       :key="index"
       :class="['stat-card', stat.colorClass]"
     >
-      <div class="stat-info">
-        <p class="label">{{ stat.label }}</p>
-        <p class="value">
-          {{ stat.value }}
-        </p>
-      </div>
+      <p class="label">{{ stat.label }}</p>
+      <p class="value">{{ stat.value }}</p>
     </div>
   </section>
 </template>
@@ -67,30 +63,89 @@ onMounted(async () => {
 <style scoped>
 .stats-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .stat-card {
-  background-color: #f9fafb;
-  padding: 1.25rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background-color: #ffffff;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.375rem;
   position: relative;
   overflow: hidden;
+  border-left: 3px solid;
+  transition: all 0.2s ease;
 }
 
-.green-border { border-top: 4px solid #4ade80; background-color: #f0fdf4; }
-.blue-border { border-top: 4px solid #3b82f6; background-color: #eff6ff; }
-.purple-border { border-top: 4px solid #a855f7; background-color: #faf5ff; }
+.stat-card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
 
-.stat-info { display: flex; flex-direction: column; z-index: 1; }
-.label { font-size: 0.875rem; font-weight: 600; color: #4b5563; margin-bottom: 0.5rem; }
-.value { font-size: 1.5rem; font-weight: 800; color: #111827; display: flex; align-items: center; gap: 0.35rem; }
-.stat-icon { font-size: 1rem; opacity: 0.6; }
-.card-icon { font-size: 1.5rem; opacity: 0.5; }
+.green-border {
+  border-left-color: #22c55e;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+}
+.blue-border {
+  border-left-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+.purple-border {
+  border-left-color: #a855f7;
+  background: linear-gradient(135deg, #faf5ff 0%, #ffffff 100%);
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .stats-container {
+    gap: 0.625rem;
+  }
+
+  .stat-card {
+    padding: 0.75rem 0.875rem;
+  }
+
+  .label {
+    font-size: 0.75rem;
+  }
+
+  .value {
+    font-size: 1.25rem;
+  }
+}
+
+/* 작은 화면에서는 세로로 나열 */
+@media (max-width: 480px) {
+  .stats-container {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .stat-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
 </style>

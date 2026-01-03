@@ -1,18 +1,23 @@
 <template>
   <div class="card write-section">
     <div class="card-header simple flex-between">
-      <div class="header-title">작성</div>
+      <div class="header-title">상담 작성</div>
       
-      <div class="dropdown-trigger" @click="toggleDropdown">
-        <span>{{ selectedLabel }}</span>
-        <div class="arrow-down"></div>
-        
-        <div v-if="isDropdownOpen" class="dropdown-menu">
-          <div class="dropdown-item" @click.stop="selectCategory('subscript', '가입상담')">가입상담</div>
-          <div class="dropdown-item" @click.stop="selectCategory('rental', '렌탈상담')">렌탈상담</div>
-          <div class="dropdown-item" @click.stop="selectCategory('inquiry', '문의상담')">문의상담</div>
-          <div class="dropdown-item" @click.stop="selectCategory('complain', '컴플레인')">컴플레인</div>
-          <div class="dropdown-item" @click.stop="selectCategory('terminate', '해지상담')">해지상담</div>
+      <div class="right-group">
+        <button class="btn-new-green" @click="resetForm">신규 상담</button>
+
+        <div class="dropdown-trigger" @click="toggleDropdown">
+          <span>{{ form.category }}</span>
+          <div class="arrow-down"></div>
+          
+          <div v-if="isDropdownOpen" class="dropdown-menu">
+            <div class="dropdown-item" @click.stop="selectCategory('유형선택')">유형선택</div>
+            <div class="dropdown-item" @click.stop="selectCategory('가입상담')">가입상담</div>
+            <div class="dropdown-item" @click.stop="selectCategory('렌탈상담')">렌탈상담</div>
+            <div class="dropdown-item" @click.stop="selectCategory('문의상담')">문의상담</div>
+            <div class="dropdown-item" @click.stop="selectCategory('컴플레인')">컴플레인</div>
+            <div class="dropdown-item" @click.stop="selectCategory('해지상담')">해지상담</div>
+          </div>
         </div>
       </div>
     </div>
@@ -23,10 +28,24 @@
         <div class="info-grid">
           <div class="info-row">
             <span class="label">수급자 이름</span>
-            <span class="value">박순자</span>
+            <div v-if="selectedCustomer" class="value">{{ selectedCustomer.name }}</div>
+            <input 
+              v-else 
+              v-model="form.name" 
+              class="compact-input" 
+              placeholder="" 
+            />
           </div>
-          <div class="info-row"><span class="label">나이</span><span class="value">78세</span></div>
-          <div class="info-row"><span class="label">전화번호</span><span class="value">010-1234-5678</span></div>
+          <div class="info-row">
+            <span class="label">전화번호</span>
+            <div v-if="selectedCustomer" class="value">{{ selectedCustomer.phone }}</div>
+            <input 
+              v-else 
+              v-model="form.phone" 
+              class="compact-input" 
+              placeholder="" 
+            />
+          </div>
         </div>
       </div>
 
@@ -37,13 +56,11 @@
           </div>
           <span class="check-label">고객 이탈 여부</span>
         </div>
-
         <div v-if="isChurned" class="churn-reason-box">
           <textarea 
             class="churn-input" 
             placeholder="이탈 사유를 상세히 입력해주세요."
           ></textarea>
-          <button class="churn-save-btn">이탈 내용 저장</button>
         </div>
       </div>
 
@@ -54,13 +71,11 @@
           </div>
           <span class="check-label">후속 조치 여부</span>
         </div>
-
         <div v-if="isNecessary" class="follow-up-box">
           <textarea 
             class="follow-up-input" 
             placeholder="필요한 후속 조치를 입력해주세요."
           ></textarea>
-          <button class="follow-up-save-btn">후속 조치 저장</button>
         </div>
       </div>
 
@@ -76,34 +91,62 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, reactive, watch } from 'vue';
+
+const props = defineProps({
+  selectedCustomer: {
+    type: Object,
+    default: null
+  }
+});
+
 // 부모에게 이벤트를 보낼 정의
-const emit = defineEmits(['update:category']);
+const emit = defineEmits(['update:category', 'reset']);
+// 신규 고객일 때 입력할 데이터를 담을 form 객체 (반응형)
+const form = reactive({
+  category: '유형선택',
+  name: '',
+  phone: ''
+});
+
+// [추가] selectedCustomer 변경 감지하여 form 데이터 동기화
+watch(() => props.selectedCustomer, (newCustomer) => {
+  if (newCustomer) {
+    form.name = newCustomer.name;
+    form.phone = newCustomer.phone;
+  } else {
+    // 고객 선택이 해제되면 폼도 비워주거나 유지(여기서는 비움)
+    form.name = '';
+    form.phone = '';
+  }
+}, { immediate: true });
+
+const resetForm = () => {
+  form.category = '가입상담';
+  form.name = '';
+  form.phone = '';
+  isChurned.value = false;
+  isNecessary.value = false;
+  emit('reset');
+};
 
 const isDropdownOpen = ref(false);
-const selectedLabel = ref('상담 카테고리');
 
 const toggleDropdown = () => {
   isDropdownOpen.value = !isDropdownOpen.value;
 };
 
-const selectCategory = (type, label) => {
-  selectedLabel.value = label;
+const selectCategory = (label) => {
+  form.category = label; // 화면 표시용 업데이트
   isDropdownOpen.value = false;
-  
-  // 핵심: 선택된 타입을 부모에게 알림
-  emit('update:category', type);
+  emit('update:category', label);
 };
 
 const isChurned = ref(false);
-
 const toggleChurn = () => {
   isChurned.value = !isChurned.value;
 };
-
-
 const isNecessary = ref(false);
-
 const toggleNecessary = () => {
   isNecessary.value = !isNecessary.value;
 };
@@ -199,7 +242,6 @@ const toggleNecessary = () => {
 .memo-area { background: #FFFBEB; border: 1px solid #FEF3C6; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 .memo-input { width: 100%; height: 100px; padding: 12px; border: none; border-radius: 8px; resize: none; font-family: inherit; box-sizing: border-box; }
 .counsel-save-btn { width: 100%; height: 32px; background: #FF8A3C; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
-.churn-save-btn { width: 100%; height: 32px; background: #EF4444; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
 .follow-up-box {
   margin-top: 12px;
   background: #EFF6FF; /* 아주 연한 파란색 배경 */
@@ -229,24 +271,46 @@ const toggleNecessary = () => {
   border-color: #3B82F6; /* 포커스 시 진한 파란색 */
 }
 
-.follow-up-save-btn {
-  width: 100%;
-  height: 32px;
-  background: #3B82F6; /* 저장 버튼: 파란색 */
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.follow-up-save-btn:hover {
-  background: #2563EB; /* 호버 시 조금 더 진한 파란색 */
-}
 
 .checkbox.blue.checked {
   background: #3B82F6;
   border-color: #3B82F6;
+}
+
+.compact-input { 
+  height: 32px; 
+  border: 1px solid #E5E7EB; 
+  border-radius: 6px; 
+  padding: 0 8px; 
+  font-size: 14px; 
+  width: 100%; 
+  box-sizing: border-box; 
+  background: white; 
+}
+.compact-input:focus { border-color: #3B82F6; outline: none; }
+
+/* [추가] 우측 요소 그룹화 */
+.right-group {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* 버튼과 드롭다운 사이 간격 */
+}
+
+/* [추가] 옅은 초록색 버튼 스타일 */
+.btn-new-green {
+  padding: 6px 12px;
+  background-color: #ECFDF5; /* 옅은 초록 배경 */
+  border: 1px solid #6EE7B7; /* 연한 초록 테두리 */
+  border-radius: 6px;
+  color: #059669; /* 짙은 초록 텍스트 */
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+.btn-new-green:hover {
+  background-color: #D1FAE5; /* 호버 시 조금 더 진하게 */
 }
 </style>

@@ -72,7 +72,7 @@ api.interceptors.request.use((config) => {
   const token = user.token;                 
   const tokenType = user.tokenType;
 
-  console.log(`[${formattedTimeForKor()}] 백엔드 요청:`,`[${config.method}]`,`${api.defaults.baseURL + config.url}`,config);
+  // console.log(`[${formattedTimeForKor()}] 백엔드 요청:`,`[${config.method}]`,`${api.defaults.baseURL + config.url}`,config);
   if (token) {
     config.headers = config.headers || {}; 
     config.headers.Authorization = `${tokenType} ${token}`; // "Authorization: Bearer <JWT>" 형태로 삽입.

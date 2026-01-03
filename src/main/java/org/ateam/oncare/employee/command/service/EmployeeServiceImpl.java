@@ -2,32 +2,28 @@ package org.ateam.oncare.employee.command.service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.ateam.oncare.alarm.command.dto.NotificationRequest;
 import org.ateam.oncare.alarm.command.service.NotificationCommandService;
 import org.ateam.oncare.auth.command.dto.RequestLogin;
 import org.ateam.oncare.employee.command.dto.RequestAuthorityDTO;
-import org.ateam.oncare.employee.command.dto.EmployeeRegisterDto; // Added
-import org.ateam.oncare.employee.command.dto.RequestAuthorityDTO;
+import org.ateam.oncare.employee.command.dto.EmployeeRequestDTO;
 import org.ateam.oncare.employee.command.dto.ResponseAuthorityDTO;
 import org.ateam.oncare.employee.command.dto.ResponseLoginEmployeeDTO;
 import org.ateam.oncare.employee.command.entity.Authority;
 import org.ateam.oncare.employee.command.entity.Employee;
+import org.ateam.oncare.employee.command.entity.EmployeeCareer;
 import org.ateam.oncare.employee.command.repository.AuthorityRepository;
+import org.ateam.oncare.employee.command.repository.EmployeeCareerCommandRepository;
+import org.ateam.oncare.employee.command.repository.EmployeeCommandRepository;
 import org.ateam.oncare.employee.command.repository.EmployeeRepository;
 import org.ateam.oncare.employee.query.mapper.EmployeeMapper; // Added
-import org.ateam.oncare.global.emun.MasterInternalType;
+import org.ateam.oncare.global.enums.MasterInternalType;
 import org.ateam.oncare.global.eventType.MasterDataEvent;
 import org.modelmapper.ModelMapper;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import org.ateam.oncare.employee.command.dto.EmployeeRequestDTO;
-import org.ateam.oncare.employee.command.entity.Employee;
-import org.ateam.oncare.employee.command.entity.EmployeeCareer;
-import org.ateam.oncare.employee.command.repository.EmployeeCommandRepository;
-import org.ateam.oncare.employee.command.repository.EmployeeCareerCommandRepository;
-
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -44,12 +40,13 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeMapper employeeMapper;
     private final NotificationCommandService notificationCommandService; // 알림 발송 도구
 
-    // [추가] JPA Repositories
     private final EmployeeCommandRepository employeeCommandRepository;
     private final EmployeeCareerCommandRepository employeeCareerCommandRepository;
 
     // 요양보호사 직종 코드 (DB의 m_job 테이블 id와 맞춰주세요. 예: 1)
     private static final Long JOB_CODE_CARE_WORKER = 5L;
+
+    private final PasswordEncoder bCryptPasswordEncoder;
 
     @Override
     public ResponseLoginEmployeeDTO getEmployee(RequestLogin loginRequest) {
@@ -95,7 +92,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         // 1. Employee 엔티티 생성 및 값 세팅
         Employee employee = new Employee();
         employee.setName(dto.getName());
-        employee.setPw("1234"); // 비밀번호 디폴트 고정
+        employee.setPw(bCryptPasswordEncoder.encode("1234")); // 비밀번호 디폴트 고정
         employee.setBirth(dto.getBirth());
         employee.setGender(dto.getGender());
         employee.setAddress(dto.getAddress());
@@ -131,26 +128,6 @@ public class EmployeeServiceImpl implements EmployeeService {
             employeeCareerCommandRepository.saveAll(careerEntities);
         }
 
-        // ============================================================
-        // 4. [수정됨] 직업 코드 1, 2, 3 (센터장, 팀장 등)에게 알림 발송
-        // ============================================================
-        Long templateId = 3L; // 직원 등록 알림 템플릿 번호
-
-        try {
-            // 1. 직업 코드로 알림 발송 (센터장, 팀장 등)
-             List<Long> targetJobCodes = Arrays.asList(5L);
-             for (Long jobCode : targetJobCodes) {
-             notificationCommandService.sendByJobCode(jobCode, templateId);
-             }
-
-            // 2. 특정 직원 ID 리스트로 알림 발송 (예: 관리자 ID 직접 지정)
-//            List<Long> specificReceiverIds = Arrays.asList(1L, 2L); // 1번, 2번 직원에게 발송
-//            notificationCommandService.send(specificReceiverIds, templateId);
-
-        } catch (Exception e) {
-            System.err.println("알림 발송 실패: " + e.getMessage());
-        }
-
         return empId;
     }
 
@@ -162,21 +139,44 @@ public class EmployeeServiceImpl implements EmployeeService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 직원이 없습니다. id=" + id));
 
         // 2. 정보 업데이트 (Setter로 덮어쓰기 -> Dirty Checking)
-        employee.setName(dto.getName());
-        // pw는 유지
-        employee.setBirth(dto.getBirth());
-        employee.setGender(dto.getGender());
-        employee.setAddress(dto.getAddress());
-        employee.setEmail(dto.getEmail());
-        employee.setPhone(dto.getPhone());
-        employee.setEmergencyNumber(dto.getEmergencyNumber());
-        employee.setHireDate(dto.getHireDate());
-        employee.setEndDate(dto.getEndDate());
+        if (dto.getName() != null)
+            employee.setName(dto.getName());
 
-        employee.setDeptCode(dto.getDeptCode());
-        employee.setJobCode(dto.getJobCode());
-        employee.setManagerId(dto.getManagerId());
-        employee.setStatusId(dto.getStatusId());
+        // 비밀번호 변경 처리
+        if (dto.getNewPassword() != null && !dto.getNewPassword().trim().isEmpty()) {
+            // 현재 비밀번호 검증 (암호가 틀렸을 때 예외 발생)
+            if (dto.getCurrentPassword() == null
+                    || !bCryptPasswordEncoder.matches(dto.getCurrentPassword(), employee.getPw())) {
+                throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+            }
+            // 일치하면 새 비밀번호 암호화하여 저장
+            employee.setPw(bCryptPasswordEncoder.encode(dto.getNewPassword()));
+        }
+        if (dto.getBirth() != null)
+            employee.setBirth(dto.getBirth());
+        if (dto.getGender() != null)
+            employee.setGender(dto.getGender());
+        if (dto.getAddress() != null)
+            employee.setAddress(dto.getAddress());
+        if (dto.getEmail() != null)
+            employee.setEmail(dto.getEmail());
+        if (dto.getPhone() != null)
+            employee.setPhone(dto.getPhone());
+        if (dto.getEmergencyNumber() != null)
+            employee.setEmergencyNumber(dto.getEmergencyNumber());
+        if (dto.getHireDate() != null)
+            employee.setHireDate(dto.getHireDate());
+        if (dto.getEndDate() != null)
+            employee.setEndDate(dto.getEndDate());
+
+        if (dto.getDeptCode() != null)
+            employee.setDeptCode(dto.getDeptCode());
+        if (dto.getJobCode() != null)
+            employee.setJobCode(dto.getJobCode());
+        if (dto.getManagerId() != null)
+            employee.setManagerId(dto.getManagerId());
+        if (dto.getStatusId() != null)
+            employee.setStatusId(dto.getStatusId());
 
         // 3. 경력(Career) 업데이트 전략: "전체 삭제 후 재등록"
         employeeCareerCommandRepository.deleteAllByEmployeeId(id);

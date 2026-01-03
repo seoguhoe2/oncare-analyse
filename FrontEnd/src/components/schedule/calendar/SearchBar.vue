@@ -6,7 +6,7 @@
       <input
         type="text"
         class="search-input"
-        placeholder="수급자, 요양보호사, 서비스 타입 검색"
+        placeholder="수급자, 요양보호사 이름 검색"
         :value="keyword"
         @input="onInput"
         @compositionstart="onCompositionStart"
@@ -32,7 +32,7 @@
 <script setup>
 const props = defineProps({
   keyword: { type: String, default: '' },
-  searchScope: { type: String, default: 'ALL' }, // ALL | BENEFICIARY | CAREWORKER | SERVICE
+  searchScope: { type: String, default: 'ALL' }, // ALL | BENEFICIARY | CAREWORKER
 });
 
 const emit = defineEmits(['update:keyword', 'update:searchScope']);
@@ -41,7 +41,6 @@ const buttons = [
   { label: '전체', value: 'ALL' },
   { label: '수급자', value: 'BENEFICIARY' },
   { label: '요양보호사', value: 'CAREWORKER' },
-  { label: '서비스 타입', value: 'SERVICE' },
 ];
 
 let composing = false;

@@ -8,40 +8,40 @@
         요양일지가 등록되면 월별 카드가 생성됩니다.
       </div>
 
-      <!-- ✅ 월 카드 목록 -->
-      <div
-        v-else
-        v-for="item in monthlySummariesView"
-        :key="item.month"
-        class="summary-card"
-        @click="openDailyList(item.month)"
-      >
-        <div class="summary-icon">📅</div>
+      <!-- ✅ 월 카드 목록(스크롤 영역) -->
+      <div v-else class="monthly-scroll">
+        <div
+          v-for="item in monthlySummariesView"
+          :key="item.month"
+          class="summary-card"
+          @click="openDailyList(item.month)"
+        >
+          <div class="summary-icon">📅</div>
 
-        <div class="summary-main">
-          <div class="summary-header">
-            <span class="summary-month">{{ item.month }}</span>
+          <div class="summary-main">
+            <div class="summary-header">
+              <span class="summary-month">{{ item.month }}</span>
 
-            <!-- ✅ AI 요약 버튼 -->
-            <button
-              type="button"
-              class="ai-btn"
-              :disabled="!!aiLoadingByMonth[item.month]"
-              @click.stop="runAiSummary(item.month)"
-            >
-              {{ aiLoadingByMonth[item.month] ? '요약 중…' : 'AI 요약' }}
-            </button>
+              <!-- ✅ AI 요약 버튼 -->
+              <button
+                type="button"
+                class="ai-btn"
+                :disabled="!!aiLoadingByMonth[item.month]"
+                @click.stop="runAiSummary(item.month)"
+              >
+                {{ aiLoadingByMonth[item.month] ? '요약 중…' : 'AI 요약' }}
+              </button>
+            </div>
+
+            <p class="summary-text">
+              {{ item.text || '해당 월의 경향을 한눈에 보려면 AI요약 버튼을 클릭하세요!' }}
+            </p>
+
+            <!-- ✅ 월 카드별 에러 메시지 -->
+            <p v-if="aiErrorByMonth[item.month]" class="ai-error">
+              {{ aiErrorByMonth[item.month] }}
+            </p>
           </div>
-
-          <p class="summary-text">
-            <!-- ✅ AI 요약 결과가 있으면 보여주고, 없으면 기본 문구 -->
-            {{ item.text || '해당 월의 경향을 한눈에 보려면 AI요약 버튼을 클릭하세요!' }}
-          </p>
-
-          <!-- ✅ 월 카드별 에러 메시지 -->
-          <p v-if="aiErrorByMonth[item.month]" class="ai-error">
-            {{ aiErrorByMonth[item.month] }}
-          </p>
         </div>
       </div>
     </div>
@@ -56,14 +56,19 @@
         ← 월별 보기로 돌아가기
       </button>
 
-      <h4 class="section-title">{{ selectedMonth }} 일지</h4>
+      <!-- ✅ 제목 + (오른쪽) 총 건수 : 사진 빨간박스 자리 -->
+      <div class="daily-top-row">
+        <h4 class="section-title">{{ selectedMonth }} 일지</h4>
+        <div class="total">총 {{ dailyTotalCount }}건</div>
+      </div>
 
       <div v-if="listLoading" class="hint">불러오는 중...</div>
       <div v-else-if="listError" class="hint error">{{ listError }}</div>
 
+      <!-- ✅ 목록(현재 페이지 10개만) -->
       <ul v-else class="daily-list">
         <li
-          v-for="log in dailyLogList"
+          v-for="log in pagedDailyLogList"
           :key="log.logId"
           class="daily-row"
           @click="openDetail(log.logId)"
@@ -79,10 +84,35 @@
           </span>
         </li>
 
-        <li v-if="dailyLogList.length === 0" class="empty-row">
+        <li v-if="dailyTotalCount === 0" class="empty-row">
           해당 월의 요양일지가 없습니다.
         </li>
       </ul>
+
+      <!-- ✅ 하단 중앙 페이징 (페이지가 2 이상일 때만 표시) -->
+      <div v-if="dailyTotalPages > 1" class="bottom-pager">
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="listLoading || dailyPage <= 0"
+          @click="dailyPage--"
+        >
+          이전
+        </button>
+
+        <span class="page-info">
+          {{ dailyPage + 1 }} / {{ dailyTotalPages }}
+        </span>
+
+        <button
+          type="button"
+          class="page-btn"
+          :disabled="listLoading || dailyPage >= dailyTotalPages - 1"
+          @click="dailyPage++"
+        >
+          다음
+        </button>
+      </div>
     </div>
 
     <!-- 상세 기록지 -->
@@ -240,23 +270,14 @@ import api from '@/lib/api'
 
 const props = defineProps({
   beneficiaryId: { type: [Number, String], required: true },
-  monthlySummaryList: { type: Array, default: () => [] } // ✅ 지금은 안 쓰더라도 props 유지
+  monthlySummaryList: { type: Array, default: () => [] }
 })
 
-/**
- * ✅ 기존: props(monthlySummaryList) 기반이었는데
- * ✅ 변경: "요양일지 리스트"에서 월을 뽑아 월카드를 생성 + GET으로 DB 요약 채우기
- *
- * - monthlySummaryList는 mock 제거하면서 빈 배열이 될 수 있어도,
- *   이제 월카드는 care-logs 기준으로 생성되므로 문제 없음.
- */
 const localMonthlySummaries = ref([])
-
-/** ✅ 템플릿에서 사용하는 월 카드 리스트 */
 const monthlySummariesView = computed(() => localMonthlySummaries.value)
 
 const recordViewMode = ref('monthly')
-const selectedMonth = ref('') // 초기값은 빈값(클릭한 월로 세팅)
+const selectedMonth = ref('')
 
 const dailyLogList = ref([])
 const selectedLogId = ref(null)
@@ -267,63 +288,56 @@ const listError = ref('')
 const detailLoading = ref(false)
 const detailError = ref('')
 
-/** ✅ AI 버튼 로딩/에러: 월별로 따로 관리 */
 const aiLoadingByMonth = ref({})
 const aiErrorByMonth = ref({})
 
-/**
- * ✅ (선택) "요양일지 없어..." 같은 메시지를 카드에 덮어쓰지 않을지 여부
- * - true: 덮어쓰기 방지(추천)
- * - false: 그대로 덮어씀
- */
 const BLOCK_EMPTY_SUMMARY_OVERWRITE = true
 
-/**
- * ✅ 월 카드 생성용: 요양일지 전체 조회 후 "월"만 추출
- * - 백엔드: GET /api/beneficiaries/{id}/care-logs (month 없이 호출)
- * - 응답의 serviceDate(YYYY-MM-DD)에서 YYYY-MM만 뽑아 월 목록 만들기
- */
+/** ✅ dailyList 페이징 상태(문의이력과 동일) */
+const dailyPage = ref(0)
+const dailyPageSize = ref(10)
+
+/** ✅ 총 건수/총 페이지 */
+const dailyTotalCount = computed(() => dailyLogList.value.length)
+const dailyTotalPages = computed(() =>
+  dailyTotalCount.value === 0 ? 0 : Math.ceil(dailyTotalCount.value / dailyPageSize.value)
+)
+
+/** ✅ 현재 페이지에 보여줄 10개 */
+const pagedDailyLogList = computed(() => {
+  const start = dailyPage.value * dailyPageSize.value
+  return dailyLogList.value.slice(start, start + dailyPageSize.value)
+})
+
 const fetchMonthlyCardsFromLogs = async () => {
   if (!props.beneficiaryId) return
 
   try {
-    // ✅ month 없이 호출: 전체(또는 백엔드가 기본 기간을 줄 수도 있음)
     const { data } = await api.get(`/api/beneficiaries/${props.beneficiaryId}/care-logs`)
     const logs = Array.isArray(data) ? data : []
 
-    // serviceDate에서 YYYY-MM 추출
     const monthSet = new Set()
     for (const log of logs) {
       const sd = String(log?.serviceDate || '')
       if (sd.length >= 7) monthSet.add(sd.slice(0, 7))
     }
 
-    // 최신 월이 위로 오게 정렬(내림차순)
     const months = Array.from(monthSet).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
 
-    // 월 카드 기본 형태 생성(요약 text는 일단 비워둠)
     localMonthlySummaries.value = months.map((m) => ({
       month: m,
-      text: '' // ✅ GET으로 채울 예정
+      text: ''
     }))
 
-    // ✅ 월 카드 생성 후, DB에 저장된 요약이 있으면 GET으로 채우기
     await fetchSavedSummariesForMonths(months)
   } catch (e) {
-    // 월 카드 생성 자체가 실패한 케이스
     localMonthlySummaries.value = []
   }
 }
 
-/**
- * ✅ (핵심) GET: DB에 저장된 "최신 월별 요약" 불러와서 카드에 채우기
- * - GET /api/beneficiaries/{id}/care-logs/monthly-summary?month=YYYY-MM
- * - 없으면(404 또는 null) 그냥 비워둠 → 기본 안내 문구가 보임
- */
 const fetchSavedSummariesForMonths = async (months) => {
   if (!Array.isArray(months) || months.length === 0) return
 
-  // 병렬로 때려도 되고, 너무 많으면 순차도 OK
   const tasks = months.map(async (m) => {
     try {
       const { data } = await api.get(
@@ -335,14 +349,12 @@ const fetchSavedSummariesForMonths = async (months) => {
       if (!summaryText) return { month: m, text: '' }
       return { month: m, text: summaryText }
     } catch (e) {
-      // ✅ 요약이 없는 경우(보통 404) → 빈값 유지
       return { month: m, text: '' }
     }
   })
 
   const results = await Promise.all(tasks)
 
-  // 결과를 월 카드에 반영
   const map = new Map(results.map((r) => [String(r.month), r.text]))
   localMonthlySummaries.value = localMonthlySummaries.value.map((it) => {
     const t = map.get(String(it.month)) ?? it.text
@@ -353,6 +365,7 @@ const fetchSavedSummariesForMonths = async (months) => {
 const openDailyList = async (month) => {
   selectedMonth.value = String(month || '')
   recordViewMode.value = 'dailyList'
+  dailyPage.value = 0 // ✅ 월 변경 시 페이지 초기화
   await fetchDailyList()
 }
 
@@ -366,9 +379,15 @@ const fetchDailyList = async () => {
       params: { month: selectedMonth.value }
     })
     dailyLogList.value = Array.isArray(data) ? data : []
+
+    // ✅ 목록 로드 후 현재 page가 범위를 벗어나면 보정
+    if (dailyPage.value > 0 && dailyPage.value >= dailyTotalPages.value) {
+      dailyPage.value = Math.max(dailyTotalPages.value - 1, 0)
+    }
   } catch (e) {
     listError.value = e?.response?.data?.message || e?.message || '일지 리스트 조회 실패'
     dailyLogList.value = []
+    dailyPage.value = 0
   } finally {
     listLoading.value = false
   }
@@ -401,12 +420,10 @@ const fetchDetail = async () => {
   }
 }
 
-/** ✅ 월별 AI 요약 실행(백엔드 POST 실행) */
 const runAiSummary = async (month) => {
   if (!month) return
   const key = String(month)
 
-  // 중복 클릭 방지
   if (aiLoadingByMonth.value[key]) return
 
   aiLoadingByMonth.value = { ...aiLoadingByMonth.value, [key]: true }
@@ -421,24 +438,15 @@ const runAiSummary = async (month) => {
 
     const summaryText = (data?.summaryText || '').trim()
 
-    // (선택) "요양일지 없어..." 메시지는 카드에 덮어쓰기 방지
     if (BLOCK_EMPTY_SUMMARY_OVERWRITE && summaryText.includes('요양일지가 없어')) {
       aiErrorByMonth.value = { ...aiErrorByMonth.value, [key]: summaryText }
       return
     }
 
-    // ✅ 카드 내용 업데이트 (해당 month만)
     localMonthlySummaries.value = localMonthlySummaries.value.map((it) => {
       if (String(it.month) !== key) return it
       return { ...it, text: summaryText }
     })
-
-    /**
-     * ✅ (선택) POST 후에도 "DB에 저장된 최신"이 맞는지 확실히 하고 싶으면
-     * 바로 GET 한 번 더 때려서 동기화해도 됨.
-     * 지금은 POST 응답을 믿고 즉시 반영만 해도 충분.
-     */
-    // await fetchSavedSummariesForMonths([key])
   } catch (e) {
     aiErrorByMonth.value = {
       ...aiErrorByMonth.value,
@@ -449,11 +457,6 @@ const runAiSummary = async (month) => {
   }
 }
 
-/**
- * ✅ beneficiaryId 바뀌면
- * - 월카드 다시 만들고(GET care-logs)
- * - 월별 저장된 요약 다시 불러오기(GET monthly-summary)
- */
 watch(
   () => props.beneficiaryId,
   async () => {
@@ -465,7 +468,8 @@ watch(
     aiLoadingByMonth.value = {}
     aiErrorByMonth.value = {}
 
-    // ✅ 월카드 재생성 + 저장된 요약 GET 반영
+    dailyPage.value = 0
+
     await fetchMonthlyCardsFromLogs()
   },
   { immediate: true }
@@ -488,7 +492,6 @@ const hasAnyAllPhysical = (d) => {
 }
 .mb-8 { margin-bottom: 8px; }
 
-/* 월별 카드 */
 .record-monthly { display: flex; flex-direction: column; gap: 8px; }
 
 .empty-month-card{
@@ -526,15 +529,25 @@ const hasAnyAllPhysical = (d) => {
   color: #4f46e5;
   cursor: pointer;
 }
-.ai-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.ai-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .summary-text { margin: 0; font-size: 12px; color: #4b5563; }
 .ai-error { margin: 6px 0 0; font-size: 11px; color: #dc2626; }
 
-/* 일지 리스트 */
-.section-title { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+/* ✅ dailyList: 제목줄 + 총건수(오른쪽) */
+.daily-top-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+.section-title { margin: 0; font-size: 14px; font-weight: 600; }
+.total {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
 .daily-list { list-style: none; margin: 0; padding: 0; }
 .daily-row {
   display: flex;
@@ -561,14 +574,33 @@ const hasAnyAllPhysical = (d) => {
 }
 .empty-row { padding: 10px 8px; color: #6b7280; font-size: 12px; }
 
-/* 상세 기록지 */
-.record-detail { font-size: 12px; }
-.detail-header-row {
+/* ✅ 하단 중앙 페이징 (Inquiry.vue와 동일) */
+.bottom-pager {
   display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 10px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 6px 0;
 }
+.page-info {
+  font-size: 12px;
+  color: #6b7280;
+}
+.page-btn {
+  border: none;
+  background: #f3f4f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.page-btn:hover { background: #e5e7eb; }
+.page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.record-detail { font-size: 12px; }
+.detail-header-row { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 10px; }
 .detail-col { flex: 1; }
 .detail-line {
   display: grid;
@@ -580,46 +612,20 @@ const hasAnyAllPhysical = (d) => {
 .detail-label { color: #6b7280; }
 .detail-value { justify-self: start; }
 
-/* 섹션 */
-.detail-section {
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-}
+.detail-section { border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .detail-section.blue { background-color: #eef2ff; }
 .detail-section.purple { background-color: #f5f3ff; }
 .detail-section.green { background-color: #ecfdf3; }
 .detail-section h5 { margin: 0 0 8px; font-size: 12px; }
 
-.subgrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 10px;
-}
-@media (max-width: 520px) {
-  .subgrid { grid-template-columns: 1fr; }
-}
-.subgroup-card {
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.55);
-}
+.subgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+@media (max-width: 520px) { .subgrid { grid-template-columns: 1fr; } }
+.subgroup-card { border-radius: 10px; padding: 8px 10px; background: rgba(255, 255, 255, 0.55); }
 .note-wide { grid-column: 1 / -1; }
 
-.sub-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
-}
+.sub-title { font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
-.chip {
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  background-color: #e5e7eb;
-  color: #374151;
-}
+.chip { border-radius: 999px; padding: 2px 8px; font-size: 11px; background-color: #e5e7eb; color: #374151; }
 
 .note-box {
   border-radius: 10px;

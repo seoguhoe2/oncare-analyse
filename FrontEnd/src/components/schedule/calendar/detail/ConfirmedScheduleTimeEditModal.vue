@@ -153,7 +153,6 @@ const onCancel = () => {
 };
 
 const onSubmit = () => {
-  // ✅ 로컬 검증은 모달에서 처리 (겹침 검증은 서버에서 처리)
   if (!props.vsId) {
     openModalToast('vsId가 없습니다. (viewModel.vsId 확인)');
     return;
@@ -174,12 +173,24 @@ const onSubmit = () => {
     openModalToast('종료 시간이 시작 시간보다 늦어야 합니다.');
     return;
   }
+  const now = new Date();
+  const startDateObj = new Date(startDt);
+
+  // 파싱 실패 방어
+  if (Number.isNaN(startDateObj.getTime())) {
+    openModalToast('날짜/시간 형식이 올바르지 않습니다.');
+    return;
+  }
+
+  if (startDateObj <= now) {
+    openModalToast('일정 수정은 현재시각 이후로 가능합니다.');
+    return;
+  }
+
   if (!isValid.value) {
     openModalToast('입력값을 확인해 주세요.');
     return;
   }
-
-  // ✅ 모달은 닫지 않음 (부모가 API 결과 보고 닫기/유지 결정)
   emit('submit', { vsId: Number(props.vsId), startDt, endDt });
 };
 </script>

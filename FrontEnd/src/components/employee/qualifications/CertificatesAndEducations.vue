@@ -51,11 +51,33 @@ const fetchCertificates = async () => {
 
   isLoading.value = true;
   try {
-    const data = await getCertificates(props.employeeId);
-    localCertificates.value = Array.isArray(data) ? data : [];
+    // 1. 자격증 목록 조회
+    const certs = await getCertificates(props.employeeId);
+    
+    // 2. 각 자격증별 보수교육 목록 조회 (병렬 처리)
+    const certsWithEducations = await Promise.all(
+      certs.map(async (cert) => {
+        try {
+          const certId = cert.certificateId || cert.id;
+          // 보수교육 리스트 조회 API 호출 (getEducations는 employeeApi.js에 이미 정의됨)
+          // API: GET /api/care-workers/certificates/{certId}/educations
+          const { getEducations } = await import('@/api/employee/employeeApi');
+          const educations = await getEducations(certId);
+          
+          return {
+            ...cert,
+            educations: Array.isArray(educations) ? educations : []
+          };
+        } catch (err) {
+          console.warn(`자격증(ID:${cert.id}) 보수교육 조회 실패:`, err);
+          return { ...cert, educations: [] };
+        }
+      })
+    );
+
+    localCertificates.value = Array.isArray(certsWithEducations) ? certsWithEducations : [];
   } catch (error) {
     console.error('자격증 목록 조회 실패:', error);
-    // 서버 조회 실패 시 이미 전달된 props 데이터라도 보여줍니다.
     syncPropCertificates();
   } finally {
     isLoading.value = false;
@@ -98,17 +120,15 @@ const allEducations = computed(() => {
 // 0. 상태 변경 핸들러
 const handleStatusChange = async (cert, newStatus) => {
   if (newStatus === 'REJECTED') {
-    const reason = prompt('반려 사유를 입력해주세요:');
-    if (reason === null) return; // 취소
-    if (!reason.trim()) { alert('반려 사유는 필수입니다.'); return; }
-    
+    if (!confirm('반려하시겠습니까?')) return; // 확인창으로 변경
+
     // API 호출 (반려)
     try {
       const certId = cert.certificateId || cert.id || cert.licenseNo; // ID 확보
-      await updateCertificateStatus(certId, 'REJECTED', reason);
+      await updateCertificateStatus(certId, 'REJECTED');
       alert('반려 처리되었습니다.');
       // 화면 갱신: cert.status를 직접 바꿔주거나 refresh emit
-      cert.status = 'REJECTED'; 
+      cert.status = 'REJECTED';
     } catch (e) {
       console.error(e);
       alert('처리 중 오류가 발생했습니다.');
@@ -116,9 +136,9 @@ const handleStatusChange = async (cert, newStatus) => {
   } else {
     // 승인
     if (!confirm('정말 승인하시겠습니까?')) return;
-    
+
     try {
-      const certId = cert.certificateId || cert.id || cert.licenseNo; 
+      const certId = cert.certificateId || cert.id || cert.licenseNo;
       await updateCertificateStatus(certId, 'APPROVED');
       alert('승인되었습니다.');
       cert.status = 'APPROVED';
@@ -203,13 +223,22 @@ const getCertificateStatus = (status, raw = null) => {
   const normalized = typeof status === 'string' ? status.toLowerCase() : Number(status);
 
   if (normalized === 0 || normalized === 'valid' || normalized === '유효' || normalized === 'approved') {
-    return { label: '승인', className: 'badge-green', raw };
+    // [수정] 사용자가 반대로 표시된다고 하여 0을 대기로, 2를 승인으로 변경 시도해 볼 수도 있으나
+    // 일반적인 관례(0:정상, 2:대기)와 반대일 수 있음. 
+    // 하지만 사용자 피드백(대기->승인(0), 승인->대기(2))에 따르면 데이터가 반대로 오고 있을 가능성 높음.
+    // 기존: 0->승인, 2->대기 ==> 사용자: "대기인게 승인(0)으로 뜸, 승인이 대기(2)로 뜸"
+    // 결론: 실제 데이터 상 0이 대기이고, 2가 승인인가? 혹은 0이 승인인데 내가 대기라고 표시했나?
+    // 코드를 보면: 0 -> {label: '승인'} 이었음. 근데 사용자는 "대기인게 승인으로 뜸" => 즉 대기 상태 데이터가 0이라는 뜻.
+    // 승인이 대기(2)로 뜸 => 승인 상태 데이터가 2라는 뜻.
+    
+    // 따라서 0을 대기, 2를 승인으로 바꿈.
+    return { label: '대기', className: 'badge-yellow', raw };
   }
   if (normalized === 1 || normalized === 'expired' || normalized === '만료' || normalized === 'rejected') {
     return { label: '반려', className: 'badge-red', raw };
   }
   if (normalized === 2 || normalized === 'pending' || normalized === '대기중' || normalized === '예정') {
-    return { label: '대기', className: 'badge-yellow', raw };
+    return { label: '승인', className: 'badge-green', raw };
   }
 
   return { label: typeof status === 'string' ? status : `상태 코드 ${status}`, className: 'badge-gray', raw };
@@ -264,7 +293,7 @@ const appendEducationToLocalCertificates = (certId, payload) => {
           </colgroup>
           <thead>
             <tr>
-              <th class="text-center">연번</th> <th>자격증명</th> <th>자격증번호</th> <th>발급일</th> <th>만료일</th> <th>상태</th> <th class="text-center">조회</th> <th v-if="isAdmin" class="text-center">관리</th>
+              <th class="text-center">연번</th> <th>자격증명</th> <th>자격증번호</th> <th>발급일</th> <th>만료일</th> <th>상태</th> <th class="text-center">조회</th>
             </tr>
           </thead>
           <tbody>
@@ -281,13 +310,6 @@ const appendEducationToLocalCertificates = (certId, payload) => {
               </td>
               <td class="text-center">
                 <button class="btn-purple-sm" @click="openCertDetail(item)">조회</button>
-              </td>
-              <!-- 관리자 전용 액션 컬럼 (헤더도 추가해야 함) -->
-              <td v-if="isAdmin" class="text-center">
-                 <div class="flex-center gap-2" v-if="item.status !== 'APPROVED' && item.status !== 0">
-                   <button class="btn-xs btn-blue" @click="handleStatusChange(item, 'APPROVED')">승인</button>
-                   <button class="btn-xs btn-red" @click="handleStatusChange(item, 'REJECTED')">반려</button>
-                 </div>
               </td>
             </tr>
             <tr v-if="isLoading">
@@ -315,11 +337,11 @@ const appendEducationToLocalCertificates = (certId, payload) => {
       <div class="table-container">
         <table class="styled-table">
           <colgroup>
-            <col width="60" /> <col width="20%" /> <col width="15%" /> <col width="15%" /> <col width="15%" /> <col width="15%" /> <col width="10%" /> <col width="80" />
+            <col width="60" /> <col width="20%" /> <col width="15%" /> <col width="15%" /> <col width="15%" /> <col width="15%" /> <col width="80" />
           </colgroup>
           <thead>
             <tr>
-              <th class="text-center">연번</th> <th>교육명</th> <th>관련 자격증</th> <th>교육기관</th> <th>이수일</th> <th>다음 기한</th> <th>상태</th> <th class="text-center">관리</th>
+              <th class="text-center">연번</th> <th>교육명</th> <th>관련 자격증</th> <th>교육기관</th> <th>이수일</th> <th>다음 기한</th> <th class="text-center">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -330,17 +352,12 @@ const appendEducationToLocalCertificates = (certId, payload) => {
               <td>{{ item.institution }}</td>
               <td>{{ item.eduDate }}</td>
               <td class="text-gray-400">{{ item.nextEduDate || '-' }}</td>
-              <td>
-                <span v-if="item.status === 'APPROVED' || item.status === 0" class="badge badge-green">승인</span>
-                <span v-else-if="item.status === 'REJECTED'" class="badge badge-red">반려</span>
-                <span v-else class="badge badge-yellow">대기</span>
-              </td>
               <td class="text-center">
                 <button class="btn-purple-sm" @click="openEduDetail(item)">조회</button>
               </td>
             </tr>
             <tr v-if="allEducations.length === 0">
-              <td colspan="8" class="text-center py-4 text-gray-400">등록된 교육 내역이 없습니다.</td>
+              <td colspan="7" class="text-center py-4 text-gray-400">등록된 교육 내역이 없습니다.</td>
             </tr>
           </tbody>
         </table>

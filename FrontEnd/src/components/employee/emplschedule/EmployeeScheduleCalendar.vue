@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { Icon } from '@iconify/vue';
 
 const props = defineProps({
   schedules: { type: Array, default: () => [] }
@@ -17,6 +18,28 @@ const getDateString = (date) => {
 const currentYear = computed(() => currentDate.value.getFullYear());
 const currentMonth = computed(() => currentDate.value.getMonth());
 const monthNames = ["1월", "2월", "3월", "4월", "5월", "6월", "7월", "8월", "9월", "10월", "11월", "12월"];
+
+// 날짜 선택기(input month)와 연동하기 위한 Computed 속성
+// currentDate(Date객체) <-> input(String "YYYY-MM") 변환 담당
+const datePickerValue = computed({
+  get() {
+    const year = currentDate.value.getFullYear();
+    const month = String(currentDate.value.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  },
+  set(val) {
+    // 사용자가 월을 변경하면 currentDate 업데이트 (해당 월 1일로)
+    if (val) {
+      const [y, m] = val.split('-');
+      currentDate.value = new Date(y, m - 1, 1);
+    }
+  }
+});
+
+// 오늘 날짜로 이동하는 함수
+const goToToday = () => {
+  currentDate.value = new Date();
+};
 
 // --- 핵심 로직: 월별 주(Week) 데이터 생성 ---
 const calendarWeeks = computed(() => {
@@ -57,8 +80,8 @@ const processEventsForWeek = (weekStart, weekEnd) => {
 
   props.schedules.forEach((event, index) => {
     // 1. FullCalendar 포맷(start, end) 대응 및 시간 제거 (YYYY-MM-DD)
-    const rawStart = event.start || event.startDate || event.date;
-    const rawEnd = event.end || event.endDate || event.date;
+    const rawStart = event.start || event.startDate || event.date || event.startDt;
+    const rawEnd = event.end || event.endDate || event.date || event.endDt;
     
     if (!rawStart || !rawEnd) return;
 
@@ -70,9 +93,9 @@ const processEventsForWeek = (weekStart, weekEnd) => {
 
     // 3. 타입 추론 (extendedProps.serviceType 등 활용)
     //    API에는 serviceType이 한글로 들어옴 ("방문요양", "복지용구" 등)
-    const serviceType = event.extendedProps?.serviceType || '';
+    const serviceType = event.extendedProps?.serviceType || event.extendedProps?.type || '';
     let type = 'care';
-    if (serviceType.includes('렌탈') || serviceType.includes('용구')) {
+    if (serviceType.includes('렌탈') || serviceType.includes('용구') || serviceType.includes('물품')) {
       type = 'rental';
     } else if (event.type) {
       type = event.type;
@@ -102,9 +125,11 @@ const processEventsForWeek = (weekStart, weekEnd) => {
 
     segments.push({
       ...event,
-      title: event.title || serviceType || event.recipient, // 제목 없을 경우 처리
-      time: formattedTime, // [신규] 시간 표시용
+      title: event.title || event.beneficiaryName || serviceType || event.recipient, 
+      time: formattedTime, 
       type, // 결정된 타입 (care/rental)
+      serviceTypeName: serviceType, // [신규] 템플릿 비교용 (예: '물품수령')
+      allDay: event.allDay || false, // [신규] allDay 속성 패스쓰루
       _uiKey: `evt-${index}-${startCol}`,
       gridColumnStart: startCol,
       gridColumnSpan: span,
@@ -128,14 +153,28 @@ const nextMonth = () => currentDate.value = new Date(currentYear.value, currentM
 <template>
   <div class="calendar-wrapper">
     <div class="header">
-      <button @click="prevMonth" class="nav-btn">
-        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        이전달
-      </button>
-      <h2 class="title">{{ currentYear }}년 {{ monthNames[currentMonth] }}</h2>
-      <button @click="nextMonth" class="nav-btn">
-        다음달 
-        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      <div class="nav-group">
+        <button @click="prevMonth" class="nav-btn">
+          <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+
+        <div class="title-area">
+          <div class="date-picker-wrapper">
+            <input type="month" v-model="datePickerValue" class="hidden-date-input" />
+            <button type="button" class="btn-calendar-icon" title="날짜 선택">
+              <Icon icon="line-md:calendar" width="20" height="20" />
+            </button>
+            <span class="current-date-text">{{ currentYear }}년 {{ monthNames[currentMonth] }}</span>
+          </div>
+        </div>
+
+        <button @click="nextMonth" class="nav-btn">
+          <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+
+      <button @click="goToToday" class="btn-today">
+        오늘
       </button>
     </div>
 
@@ -192,17 +231,20 @@ const nextMonth = () => currentDate.value = new Date(currentYear.value, currentM
             }"
           >
             <span class="event-content">
-              <span v-if="event.type === 'rental' && !event.isContinuesLeft" class="icon-box">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+              <!-- Case A: 물품/렌탈 (아이콘 변경) -->
+              <span v-if="['물품수령', '물품회수', '복지용구'].includes(event.serviceTypeName) || event.type === 'rental'" class="icon-box">
+                 <Icon icon="line-md:download-outline" width="14" height="14" />
               </span>
               
-              <span v-if="event.type === 'care'" class="icon-box">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4-12 12-4-4"/></svg>
+              <!-- Case B: 일반 요양 (기본 아이콘) -->
+              <span v-else-if="event.type === 'care'" class="icon-box">
+                <Icon icon="line-md:clipboard-check" width="14" height="14" />
               </span>
 
               <span class="event-title truncate">
-                {{ event.title || event.recipient }}
-                <span class="time-text">{{ event.time }}</span>
+                <!-- allday가 true이면 시간 숨김 -->
+                <span v-if="!event.allDay && event.time" class="time-text mr-1"><Icon icon="line-md:watch-loop" width="12" height="12" style="display:inline; vertical-align:middle; margin-right:2px;" /> {{ event.time }}</span>
+                {{ event.title }}
               </span>
             </span>
           </div>
@@ -227,8 +269,96 @@ const nextMonth = () => currentDate.value = new Date(currentYear.value, currentM
 /* 헤더 */
 .header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f0f0f0; }
 .title { font-size: 20px; font-weight: 700; color: #166534; margin: 0; }
-.nav-btn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; background: white; color: #555; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-.nav-btn:hover { background: #f9fafb; border-color: #ccc; color: #333; }
+
+/* 오늘 버튼 */
+.btn-today {
+  padding: 6px 16px;
+  background-color: white;
+  border: 1px solid #d1d5db;
+  border-radius: 20px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-today:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+/* 중앙 네비게이션 그룹 */
+.nav-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 네비게이션 버튼 */
+.nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  transition: color 0.2s;
+}
+.nav-btn:hover { color: #111; }
+
+/* 타이틀 영역 (날짜 선택기 + 연도/월 표시) */
+.title-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #166534;
+}
+
+/* 현재 날짜 텍스트 */
+.current-date-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #166534;
+}
+
+/* 날짜 선택기 래퍼 (아이콘 위에 투명 input 겹치기) */
+.date-picker-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px; /* 아이콘과 텍스트 사이 간격 */
+  cursor: pointer;
+}
+
+/* 투명한 날짜 input (클릭 영역 확보용) */
+.hidden-date-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0; /* 투명하게 숨김 */
+  cursor: pointer;
+  z-index: 10;
+}
+
+/* 달력 아이콘 버튼 */
+.btn-calendar-icon {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+.btn-calendar-icon:hover {
+  transform: scale(1.1);
+}
 
 /* 범례 */
 .legend { display: flex; gap: 16px; padding: 12px 20px; font-size: 13px; color: #555; background: #fff; border-bottom: 1px solid #f0f0f0; }

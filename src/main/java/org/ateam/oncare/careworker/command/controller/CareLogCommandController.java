@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.command.dto.CreateCareLogRequest;
 import org.ateam.oncare.careworker.command.dto.UpdateCareLogRequest;
 import org.ateam.oncare.careworker.command.service.CareLogCommandService;
 import org.ateam.oncare.careworker.query.dto.ApiResponse;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,9 +19,9 @@ public class CareLogCommandController {
     // 1. 요양일지 작성
     @PostMapping
     public ApiResponse<Void> createCareLog(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId,
+            @AuthenticationPrincipal EmployeeImpl employee,
             @RequestBody CreateCareLogRequest request) {
-        careLogCommandService.createCareLog(careWorkerId, request);
+        careLogCommandService.createCareLog(employee.getId(), request);
         return ApiResponse.success(null);
     }
 

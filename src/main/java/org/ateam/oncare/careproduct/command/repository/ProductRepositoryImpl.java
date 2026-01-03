@@ -1,20 +1,26 @@
 package org.ateam.oncare.careproduct.command.repository;
 
 import com.querydsl.core.BooleanBuilder;
+import com.querydsl.core.Tuple;
+import com.querydsl.core.types.Expression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ateam.oncare.careproduct.command.dto.*;
-import org.ateam.oncare.careproduct.command.entity.CareProduct;
-import org.ateam.oncare.careproduct.command.entity.QCareProduct;
+import org.ateam.oncare.careproduct.command.entity.*;
+import org.ateam.oncare.careproduct.command.enums.ProductHistoryStatus;
 import org.ateam.oncare.careproduct.mapper.ProductMapper;
+import org.ateam.oncare.rental.command.dto.RentalProductForCalculationDTO;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
-import org.springframework.util.StringUtils;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.math.BigDecimal;
+import java.sql.PreparedStatement;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -23,6 +29,9 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
     private final JPAQueryFactory queryFactory;
     private final ProductMapper productMapper;
     private final QCareProduct product = QCareProduct.careProduct;
+    private final QProductStatus productStatus = QProductStatus.productStatus;
+    private final QProductHistory productHistory = QProductHistory.productHistory;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     public List<AggregationOfProductDTO> selectAggregationOfProduct(List<String> masterCodes) {
@@ -37,6 +46,7 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
                                                 .otherwise(0)
                                                 .sum(),
                                         product.productStatus.when(2).then(1).otherwise(0).sum(),
+                                        product.productStatus.when(3).then(1).otherwise(0).sum(),
                                         Expressions.constant(0)
                                 )
                         )
@@ -58,9 +68,24 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
 
         builder.and(product.productCd.eq(condition.getProductCode()));
 
-        List<CareProduct> products = queryFactory
-                .select(product)
+        Expression<String> renterNameSubQuery = JPAExpressions
+                .select(productHistory.beneficiaryName)
+                .from(productHistory)
+                .where(productHistory.id.eq(
+                        JPAExpressions
+                                .select(productHistory.id.max())
+                                .from(productHistory)
+                                .where(productHistory.productId.eq(product.id)
+                                        .and(productHistory.status.eq(ProductHistoryStatus.RENTAL)))
+                ));
+
+        List<Tuple> products = queryFactory
+                .select( product
+                        , productStatus.name
+                        , renterNameSubQuery
+                )
                 .from(product)
+                .join(productStatus).on(productStatus.id.eq(product.productStatus.longValue()))
                 .where(builder)
                 .offset(pageable.getOffset())
                 .limit(pageSize + 1) //다음 데이터가 있는지 확인을 위해 1개 더 가지고옴
@@ -73,9 +98,29 @@ public class ProductRepositoryImpl implements ProductRepositoryCustom {
         }
 
         List<ResponseProductDTO> dtos = products.stream()
-                .map(productMapper::toProductDTO)
+                .map(data ->{
+                    ResponseProductDTO dto = productMapper.toProductDTO(data.get(product));
+                    dto.setStatusName(String.valueOf(data.get(productStatus.name)));
+                    if(dto.getProductStatus() == 2)
+                        dto.setBeneficiaryName(String.valueOf(data.get(renterNameSubQuery)));
+                    return dto;
+                })
                 .toList();
 
         return new SliceImpl<>(dtos, pageable, hasNext);
+    }
+
+    @Override
+    public void calculationRentalFee(List<RentalProductForCalculationDTO> calcProductRentalFeeList) {
+        String sql = "update care_product " +
+                "set cumulative_revenue = ifnull(cumulative_revenue, 0) + ? " +
+                "where id = ? ";
+
+        jdbcTemplate.batchUpdate(sql, calcProductRentalFeeList, 1000,
+                (PreparedStatement ps, RentalProductForCalculationDTO dto)->{
+                    ps.setBigDecimal(1, BigDecimal.valueOf(dto.getCalcAmount()));
+                    ps.setString(2, dto.getProductCode());
+                });
+
     }
 }

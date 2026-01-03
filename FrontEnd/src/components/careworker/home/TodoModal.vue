@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, defineProps, defineEmits, onMounted, watch, computed } from "vue";
+import { ref, defineProps, defineEmits, onMounted, onUnmounted, watch, computed } from "vue";
 import { getMyBeneficiaries } from "@/api/careworker";
 
 const props = defineProps({
@@ -122,8 +122,20 @@ watch(
   }
 );
 
+// ESC 키로 모달 닫기
+const handleKeydown = (event) => {
+  if (event.key === 'Escape' && props.isOpen) {
+    onClose();
+  }
+};
+
 onMounted(() => {
   fetchBeneficiaries();
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
 });
 
 defineExpose({ resetForm });

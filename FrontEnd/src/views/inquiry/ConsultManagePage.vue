@@ -1,325 +1,204 @@
 <template>
-    <div>
+  <div class="page-container">
+    <div class="page-header">
       <h2>상담 관리</h2>
     </div>
 
-    <div class="dashboard-container">
-    
-    <div class="card search-section">
-        <CustomerSearchCard />
+    <div class="upper-column">
+      
+      <div class="grid-item">
+        <div class="card search-card">
+          <CustomerSearchCard @select-customer="handleSelectCustomer" />
+        </div>
+      </div>
+
+      <div class="grid-item list-wrapper">
+        <CounselList 
+          :selected-customer="currentCustomer" 
+          @select-counsel-detail="handleSelectCounselDetail"
+        />
+      </div>
+      
     </div>
 
-    <CounselList />
+    <div class="bottom-column">
+      
+      <div class="grid-item">
+        <CounselWriteCard
+        :selected-customer="currentCustomer"
+        @update:category="handleCategoryChange" 
+        @reset="handleResetCustomer" />
+      </div>
 
-    <CounselWriteCard @update:category="handleCategoryChange" />
+      <div class="grid-item detail-container">
+        <div class="help-wrapper">
+          <CounselHelpDetail
+          :category="currentCategory"
+          :counsel-detail="currentCounselDetail"
+          :customer="currentCustomer"
+          />
+        </div>
+      </div>
 
-    <CounselHelpDetail :category="currentCategory" />
-
+    </div>
   </div>
+</template>
 
-  </template>
-  
-  <script setup>
-  import { ref } from 'vue';
-  import CustomerSearchCard from '@/components/inquiry/Counsel/CustomerSearchCard.vue';
-  import CounselList from '@/components/inquiry/Counsel/CounselList.vue';
-  import CounselWriteCard from '@/components/inquiry/Counsel/CounselWriteCard.vue';
-  import CounselHelpDetail from '@/components/inquiry/Counsel/CounselHelpDetail.vue';
+<script setup>
+import { ref } from 'vue';
+import CustomerSearchCard from '@/components/inquiry/Counsel/CustomerSearchCard.vue';
+import CounselList from '@/components/inquiry/Counsel/CounselList.vue';
+import CounselWriteCard from '@/components/inquiry/Counsel/CounselWriteCard.vue';
+import CounselHelpDetail from '@/components/inquiry/Counsel/CounselHelpDetail.vue';
+import CounselDetailCard from '@/components/inquiry/Counsel/CounselDetailCard.vue';
+import SubscriptProcess from '@/components/inquiry/Counsel/Process/SubscriptProcess.vue';
 
-  // 현재 선택된 카테고리를 저장하는 변수
+// 상태 관리
+const currentCustomer = ref(null);
+const currentCounselDetail = ref(null);
 const currentCategory = ref('');
 
-// 작성 카드에서 카테고리가 변경되었을 때 실행되는 함수
+// 이벤트 핸들러
+const handleSelectCustomer = (customer) => {
+  console.log('선택된 고객:', customer);
+  currentCustomer.value = customer;
+  currentCounselDetail.value = null; 
+};
+
+const handleSelectCounselDetail = (detailData) => {
+  console.log('선택된 상담 상세:', detailData);
+  currentCounselDetail.value = detailData;
+};
+
 const handleCategoryChange = (newCategory) => {
-  console.log('카테고리 변경됨:', newCategory);
+  console.log('작성 카테고리 변경됨:', newCategory);
   currentCategory.value = newCategory;
 };
-  </script>
+
+const handleResetCustomer = () => {
+  console.log('고객 선택 초기화');
+  currentCustomer.value = null;
+  currentCounselDetail.value = null;
+};
+</script>
 
 <style scoped>
-.dashboard-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+/* ✅ 페이지는 스크롤 가능해야 하므로 "고정 height"를 없애고 min-height로 처리 */
+.page-container {
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
+  padding: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
+
+  /* 핵심: 고정 높이 제거 */
+  min-height: 100vh;
 }
 
-/* 카드 공통 스타일 */
+.page-header {
+  flex: 0 0 auto;
+}
+
+/* ✅ [1] upper-column: 무한 스크롤을 위한 "고정 높이" 영역 */
+.upper-column {
+  /* 고정 높이(뷰포트 기반) + 최소/최대 */
+  height: clamp(420px, 45vh, 560px);
+  min-height: 420px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+
+  /* 내부 스크롤(리스트)만 허용하기 위해 영역 자체는 넘침 숨김 */
+  overflow: hidden;
+  align-items: stretch; /* 각 칸이 높이를 꽉 채우게 */
+}
+
+/* ✅ upper 내부의 카드/래퍼는 "부모 높이를 100%"로 꽉 채우도록 */
+.grid-item {
+  min-width: 0;
+  min-height: 0; /* 중요: grid 자식 overflow 안정화 */
+}
+
+/* 카드 공통 */
 .card {
   background: white;
   border-radius: 10px;
   border: 1px solid #E5E7EB;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 내부 컨텐츠 넘침 방지 */
-  min-height: 340px; /* 최소 높이 보장 */
+  overflow: hidden;
+
+  height: 100%;     /* upper에서 칸 높이 꽉 채우기 */
+  min-height: 0;    /* 중요 */
 }
 
-/* 카드 헤더 */
-.card-header {
-  padding: 16px;
-  border-bottom: 1px solid #E5E7EB;
+/* 검색 카드도 동일하게 */
+.search-card {
+  height: 100%;
+  min-height: 0;
+}
+
+/* ✅ 리스트 래퍼: 여기(또는 CounselList 내부)에서만 스크롤이 일어나게 */
+.list-wrapper {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  overflow: hidden; /* 스크롤은 내부(실제 리스트)에 맡김 */
 }
 
-.card-header.simple {
-  padding-bottom: 15px; /* 보정 */
-}
-
-.card-header.flex-between {
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-title {
-  color: #388E3C;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 28px;
-}
-
-/* 검색 영역 */
-.search-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.search-input-box {
-  position: relative;
-  width: 100%;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-}
-
-.icon-ring {
-  width: 10px; height: 10px;
-  border: 1.33px solid #99A1AF;
-  border-radius: 50%;
-  position: absolute; top: 0; left: 0;
-}
-.icon-handle {
-  width: 3px; height: 3px;
-  border-top: 1.33px solid #99A1AF;
-  position: absolute; bottom: 1px; right: 1px;
-  transform: rotate(45deg);
-}
-
-.search-input {
-  width: 100%;
-  height: 42px;
-  padding: 8px 16px 8px 40px;
-  border-radius: 10px;
-  border: 1px solid #E5E7EB;
-  font-size: 16px;
-  color: #2E3440;
-  outline: none;
-}
-.search-input::placeholder { color: rgba(46, 52, 64, 0.5); }
-
-/* 필터 탭 */
-.filter-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.simple-tabs {
-  padding: 12px 16px; /* 헤더 밖 리스트 위에 위치 */
-}
-
-.filter-tab {
-  background: none;
-  border: none;
-  font-size: 16px;
-  color: #2E3440;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-.filter-tab:hover { background-color: #f3f4f6; }
-
-/* 리스트 스타일 */
-.list-body {
+/* (권장) CounselList의 최상위 컨테이너에 아래처럼 적용되면 가장 깔끔합니다.
+   - 부모(list-wrapper)가 flex column이므로 CounselList 루트가 flex:1로 늘어나야 함
+   - 그 내부에서 overflow:auto 로 스크롤
+*/
+/*
+.list-wrapper :deep(.counsel-list-root) {
   flex: 1;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto; /* 내용 많으면 스크롤 */
+  min-height: 0;
+  overflow: auto;
+}
+*/
+
+/* ✅ [2] bottom-column: 내용에 따라 자연스럽게 늘어나는 영역 */
+.bottom-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+
+  /* 핵심: 높이/overflow로 막지 않기 */
+  align-items: start;      /* 내용 위쪽부터 자연스럽게 쌓이게 */
+  align-content: start;
 }
 
-.list-item {
-  padding: 11px;
-  border-radius: 10px;
-  border: 1px solid #E5E7EB;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.list-item:hover { border-color: #00C950; }
-.list-item.active { background: #F0FDF4; border-color: #00C950; }
-.list-item.active-blue { background: #EFF6FF; border-color: #2B7FFF; }
-
-.item-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-
-/* 리스트 내부 요소 */
-.name { color: #008236; font-weight: 500; min-width: 50px;}
-.badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.badge.yellow { background: #FEF9C2; color: #A65F00; }
-.badge.green { background: #DCFCE7; color: #008236; }
-
-.pill { padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
-.pill.purple { background: #F3E8FF; color: #8200DB; border: 1px solid #E9D4FF; }
-.pill.orange { background: #FFEDD4; color: #CA3500; border: 1px solid #FFD6A7; }
-.pill.blue { background: #DBEAFE; color: #1447E6; border: 1px solid #BEDBFF; }
-
-.info-cell { display: flex; align-items: center; gap: 4px; color: #4A5565; flex: 1; }
-.icon-sq, .icon-sq-sm {
-  width: 10px; height: 10px; border: 1px solid #4A5565; display: inline-block;
-}
-.icon-sq-sm { width: 9px; height: 9px; }
-
-.count { color: #6A7282; font-size: 12px; margin-left: auto; }
-
-/* 작성 폼 스타일 (Overlay 제거 후 Flex Flow로 변경) */
-.form-body {
-  padding: 20px;
+/* 우측 하단: 상세 + 도움말 스택 */
+.detail-container {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  background-color: #F9FAFB;
-  flex: 1;
+
+  min-height: 0; /* 내부 overflow 안정화 */
 }
 
-.sub-title {
-  color: #6A7282;
-  font-size: 14px;
-  margin-bottom: 12px;
+.detail-card-wrapper {
+  /* 내용만큼 */
 }
 
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px 24px;
+.help-wrapper {
+  /* 내용만큼 */
 }
 
-.info-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.label { color: #6A7282; font-size: 12px; }
-.value { color: #101828; font-size: 16px; }
-.value.placeholder { color: #9CA3AF; font-size: 14px; }
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #FEF2F2;
-  border: 1px solid #FFE2E2;
-  border-radius: 14px;
-}
-.checkbox { width: 16px; height: 16px; background: #F3F3F5; border: 1px solid rgba(0,0,0,0.1); border-radius: 4px; }
-.check-label { color: #364153; font-size: 14px; }
-
-.memo-area {
-  background: #FFFBEB;
-  border: 1px solid #FEF3C6;
-  border-radius: 14px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.memo-input {
-  width: 100%;
-  height: 100px;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  resize: none;
-  font-family: inherit;
-}
-
-.save-btn {
-  width: 100%;
-  height: 32px;
-  background: #FF8A3C;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-/* 상세 페이지 스타일 */
-.detail-body {
-  padding: 20px;
-  flex: 1;
-}
-
-.history-box {
-  background: #EFF6FF;
-  border: 1px solid #DBEAFE;
-  border-radius: 14px;
-  padding: 20px;
-}
-
-.history-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.history-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.history-badge { background: #DBEAFE; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #4A5565; }
-.history-date { font-size: 12px; color: #4A5565; }
-.history-manager { font-size: 12px; color: #6A7282; }
-.history-desc { font-size: 14px; color: #4A5565; line-height: 1.5; margin: 0; }
-
-.dropdown-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #CCCCCC;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 14px;
-  color: #6F6F6F;
-  cursor: pointer;
-}
-.arrow-down {
-  width: 0; height: 0; 
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid black;
-}
-
-/* 반응형 (화면이 좁을 때 1열로 변경) */
+/* ✅ 반응형 */
 @media (max-width: 1200px) {
-  .dashboard-container {
+  .upper-column {
+    grid-template-columns: 1fr;
+    height: clamp(520px, 55vh, 720px); /* 모바일에서 upper 조금 더 확보 */
+  }
+
+  .bottom-column {
     grid-template-columns: 1fr;
   }
 }

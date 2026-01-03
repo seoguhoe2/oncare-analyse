@@ -1,14 +1,5 @@
 <template>
   <div class="weekly-selected">
-    <div class="inner-header">
-      <h3 class="inner-title">주간 일정</h3>
-      <div class="week-nav">
-        <button type="button" class="nav-btn" @click="goPrevWeek">〈</button>
-        <span class="week-range">{{ weekRangeText }}</span>
-        <button type="button" class="nav-btn" @click="goNextWeek">〉</button>
-      </div>
-    </div>
-
     <div class="grid-header">
       <div class="cell time-header">시간</div>
       <div v-for="day in days" :key="day" class="cell day-header">
@@ -58,11 +49,15 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { getBeneficiaryDetail, getCareWorkerDetail } from '@/api/schedule/matching.js'
+import { useMatchingSelectionStore } from '@/stores/matchingSelection'
 
 const props = defineProps({
   recipient: { type: Object, default: null },
-  caregiver: { type: Object, default: null }, 
+  caregiver: { type: Object, default: null },
+  refreshKey: { type: Number, default: 0 },
 })
+
+const store = useMatchingSelectionStore()
 
 const days = ['월', '화', '수', '목', '금', '토', '일']
 const timeSlots = [
@@ -76,24 +71,11 @@ const getCareWorkerId = (obj) => obj?.careWorkerId ?? obj?.id ?? null
 
 const loading = ref(false)
 const error = ref('')
-const recipientDetail = ref(null)
 
+const recipientDetail = ref(null)
 const caregiverDetail = ref(null)
 
-const weekStart = ref(startOfWeek(new Date()))
-const weekRangeText = computed(() => {
-  const start = formatMD(weekStart.value)
-  const end = formatMD(addDays(weekStart.value, 6))
-  return `${start} - ${end}`
-})
-
-function goPrevWeek() {
-  weekStart.value = addDays(weekStart.value, -7)
-}
-function goNextWeek() {
-  weekStart.value = addDays(weekStart.value, 7)
-}
-
+/* ===== API ===== */
 async function loadRecipientDetail() {
   const beneficiaryId = getBeneficiaryId(props.recipient)
   if (!beneficiaryId) {
@@ -129,6 +111,12 @@ async function loadCaregiverDetail() {
   }
 }
 
+function reloadBoth() {
+  loadRecipientDetail()
+  loadCaregiverDetail()
+}
+
+/* ===== watch ===== */
 watch(
   () => getBeneficiaryId(props.recipient),
   () => loadRecipientDetail(),
@@ -141,6 +129,17 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => props.refreshKey,
+  () => reloadBoth()
+)
+
+watch(
+  () => store.refreshTick,
+  () => reloadBoth()
+)
+
+/* ===== 데이터 가공 ===== */
 const dayToKor = (day) => {
   const map = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일' }
   return map[day] || ''
@@ -155,7 +154,7 @@ const normalizeTime = (t) => {
 const recipientEvents = computed(() => {
   const beneficiaryId = getBeneficiaryId(props.recipient)
   const schedules = recipientDetail.value?.schedules || []
-  if (!beneficiaryId || !Array.isArray(schedules) || schedules.length === 0) return []
+  if (!beneficiaryId || !Array.isArray(schedules)) return []
 
   return schedules
     .map((s, idx) => {
@@ -181,7 +180,7 @@ const recipientEvents = computed(() => {
 const caregiverEvents = computed(() => {
   const careWorkerId = getCareWorkerId(props.caregiver)
   const times = caregiverDetail.value?.workingTimes || []
-  if (!careWorkerId || !Array.isArray(times) || times.length === 0) return []
+  if (!careWorkerId || !Array.isArray(times)) return []
 
   return times
     .map((w, idx) => {
@@ -208,11 +207,10 @@ const eventsByDay = computed(() => {
   const map = {}
   days.forEach((d) => (map[d] = []))
 
-  ;[...caregiverEvents.value, ...recipientEvents.value].forEach((ev) => {
+  ;[...recipientEvents.value].forEach((ev) => {
     if (map[ev.day]) map[ev.day].push(ev)
   })
 
-  // 겹칠 때 보기 좋게: 근무(초록) 먼저, 희망(노랑) 나중
   Object.keys(map).forEach((k) => {
     map[k].sort((a, b) => (a.type === b.type ? 0 : a.type === 'work' ? -1 : 1))
   })
@@ -221,36 +219,17 @@ const eventsByDay = computed(() => {
 })
 
 const eventStyle = (event) => {
-  const [startH, startM] = event.start.split(':').map(Number)
-  const [endH, endM] = event.end.split(':').map(Number)
+  const [sh, sm] = event.start.split(':').map(Number)
+  const [eh, em] = event.end.split(':').map(Number)
 
   const slotHeight = 48
-  const startIndex = startH - 6 + startM / 60
-  const endIndex = endH - 6 + endM / 60
+  const startIndex = sh - 6 + sm / 60
+  const endIndex = eh - 6 + em / 60
+
   const top = startIndex * slotHeight
   const height = (endIndex - startIndex) * slotHeight
 
   return { top: `${top}px`, height: `${height}px` }
-}
-
-/* ====== date helpers ====== */
-function startOfWeek(date) {
-  const d = new Date(date)
-  const day = d.getDay()
-  const diff = (day === 0 ? -6 : 1) - day
-  d.setDate(d.getDate() + diff)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-function addDays(date, days) {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d
-}
-function formatMD(date) {
-  const m = String(date.getMonth() + 1)
-  const d = String(date.getDate())
-  return `${m}/${d}`
 }
 </script>
 
@@ -263,40 +242,6 @@ function formatMD(date) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.inner-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.inner-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #166534;
-}
-
-.week-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #4b5563;
-}
-
-.nav-btn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 2px 4px;
-}
-
-.week-range {
-  font-weight: 500;
 }
 
 .grid-header {

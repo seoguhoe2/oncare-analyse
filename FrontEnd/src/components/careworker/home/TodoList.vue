@@ -308,14 +308,14 @@ onMounted(() => {
         v-for="todo in todos"
         :key="todo.id"
         :class="['todo-item', { 'has-detail': selectedDetailId === todo.id }]"
-        @click="handleSelectTodo(todo)"
       >
-        <div class="todo-main">
+        <div class="todo-main" @click="handleSelectTodo(todo)">
           <div class="todo-left">
             <input
               type="checkbox"
               :checked="todo.checked"
               @change.stop="toggleTodo(todo)"
+              @click.stop
               class="checkbox"
             />
             <div class="todo-content">

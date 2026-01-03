@@ -30,9 +30,13 @@ export const getScheduleDayList = async ({
   serviceTypeId,
   keyword,
   searchField,
+  page = 0,
+  size = 5,
 } = {}) => {
   const params = {
     date,
+    page,
+    size,
     ...(beneficiaryId != null ? { beneficiaryId } : {}),
     ...(careWorkerId != null ? { careWorkerId } : {}),
     ...(serviceTypeId != null ? { serviceTypeId } : {}),

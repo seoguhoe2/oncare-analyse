@@ -4,14 +4,14 @@
     <!-- 왼쪽 : 장기요양등급 만료 테이블 -->
     <section class="left-panel">
       <LongCare
-        :key="refreshKey"
         v-model:selected-id="selectedId"
+        :refresh-key="refreshKey"
+        :last-change="lastChange"
       />
     </section>
 
     <!-- 오른쪽 : 상세 안내 컴포넌트 -->
     <section class="right-panel">
-      <!-- 아직 선택 안 된 상태 -->
       <div v-if="!selectedId" class="placeholder-card">
         <div class="placeholder-icon">⚠</div>
         <p class="placeholder-text">
@@ -20,12 +20,11 @@
         </p>
       </div>
 
-      <!-- ✅ 선택된 상태: expirationId만 넘기면 됨 -->
       <LongCareDetail
         v-else
         :expiration-id="selectedId"
         @close="selectedId = null"
-        @refresh="refreshKey++"
+        @refresh="onRefresh"
       />
     </section>
   </div>
@@ -36,17 +35,26 @@ import { ref } from 'vue'
 import LongCare from '@/components/recipient/longcare/LongCare.vue'
 import LongCareDetail from '@/components/recipient/longcare/LongCareDetail.vue'
 
-/** ✅ 선택된 expirationId */
 const selectedId = ref(null)
+const refreshKey = ref(0)
 
 /**
- * ✅ 상세에서 완료/수정/삭제/연장예정체크 등으로 인해
- * 목록이 갱신되어야 하면 refresh 이벤트를 올리고
- * 왼쪽 목록을 리로드하고 싶을 때 사용 가능
- *
- * - 가장 간단: LongCare에 :key를 걸어서 재마운트 → 목록 재조회
+ * ✅ 상세에서 올라온 변경 이벤트 전달용(즉시 UI 반영)
+ * 예) { type:'extendsStatus', expirationId: 3, extendsStatus:'N' }
  */
-const refreshKey = ref(0)
+const lastChange = ref(null)
+
+const onRefresh = (payload) => {
+  // ✅ extendsStatus 토글은 "즉시 제거/이동"이 목적 → 재조회 말고 이벤트만 전달
+  if (payload && payload.type === 'extendsStatus') {
+    // 같은 payload 연속 emit이어도 watcher가 확실히 돌도록 객체 새로 생성
+    lastChange.value = { ...payload, ts: Date.now() }
+    return
+  }
+
+  // ✅ 그 외(완료/삭제/수정 등)는 기존대로 재조회
+  refreshKey.value++
+}
 </script>
 
 <style scoped>
@@ -57,14 +65,12 @@ const refreshKey = ref(0)
   gap: 16px;
 }
 
-/* 왼/오 패널 공통 */
 .left-panel,
 .right-panel {
   display: flex;
   flex-direction: column;
 }
 
-/* 선택 전 안내 카드 */
 .placeholder-card {
   width: 100%;
   height: 100%;
@@ -92,7 +98,6 @@ const refreshKey = ref(0)
   line-height: 1.5;
 }
 
-/* 반응형 */
 @media (max-width: 960px) {
   .page-body-longcare {
     grid-template-columns: 1fr;

@@ -140,6 +140,17 @@
                 OR b.address LIKE CONCAT('%', #{keyword}, '%')
                 )
             </if>
+
+            <!-- ✅ 요양보호사 필터링: matching 기준 현재 배정 중인 수급자만 조회 -->
+            <if test="careWorkerId != null">
+                AND EXISTS (
+                    SELECT 1
+                    FROM matching m
+                    WHERE m.beneficiary_id = b.id
+                    AND m.care_worker_id = #{careWorkerId}
+                    AND m.status = 'Y'
+                )
+            </if>
         </where>
     </sql>
 
@@ -222,6 +233,16 @@
         FROM beneficiary b
         <include refid="BaseJoin"/>
         <include refid="BaseWhere"/>
+    </select>
+
+    <!-- employeeId로 careWorkerId 조회 -->
+    <select id="selectCareWorkerIdByEmployeeId"
+            parameterType="long"
+            resultType="long">
+        SELECT id
+        FROM care_worker
+        WHERE employee_id = #{employeeId}
+        LIMIT 1
     </select>
 
 </mapper>

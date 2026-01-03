@@ -1,5 +1,6 @@
 package org.ateam.oncare.employee.command.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.ateam.oncare.employee.command.dto.AddCertificateDTO;
 import org.ateam.oncare.employee.command.dto.AddEducationDTO;
@@ -22,7 +23,7 @@ public class CertAndEduCommandController {
     @PostMapping("/employees/{employeeId}/certificates")
     public ResponseEntity<String> addCertificate(
             @PathVariable Long employeeId,
-            @RequestBody AddCertificateDTO dto) {
+            @Valid @RequestBody AddCertificateDTO dto) {
 
         certAndEduCommandService.addCertificate(employeeId, dto);
         return ResponseEntity.ok("자격증이 추가되었습니다.");
@@ -36,7 +37,7 @@ public class CertAndEduCommandController {
     @PostMapping("/certificates/{careWorkerCertId}/educations")
     public ResponseEntity<String> addEducation(
             @PathVariable Long careWorkerCertId,
-            @RequestBody AddEducationDTO dto) {
+            @Valid @RequestBody AddEducationDTO dto) {
 
         certAndEduCommandService.addEducation(careWorkerCertId, dto);
         return ResponseEntity.ok("보수 교육 이력이 추가되었습니다.");
@@ -49,5 +50,28 @@ public class CertAndEduCommandController {
 
         certAndEduCommandService.updateCertificateStatus(id, dto);
         return ResponseEntity.ok("상태가 변경되었습니다.");
+    }
+
+    /**
+     * 3. 보수 교육 일괄 등록
+     * URL: POST /api/care-workers/educations/bulk
+     */
+    @PostMapping("/educations/bulk")
+    public ResponseEntity<String> addEducationsBulk(
+            @RequestBody org.ateam.oncare.employee.command.dto.BulkAddEducationDTO dto) {
+        certAndEduCommandService.addEducationsBulk(dto);
+        return ResponseEntity.ok("선택한 대상의 교육 이력이 일괄 등록되었습니다.");
+    }
+
+    private final org.ateam.oncare.employee.scheduler.EducationScheduler educationScheduler;
+
+    /**
+     * 보수교육 알림 스케줄러 수동 실행 (테스트용)
+     * URL: POST /api/care-workers/educations/check
+     */
+    @PostMapping("/educations/check")
+    public ResponseEntity<String> triggerEducationCheck() {
+        educationScheduler.checkEducationStatus();
+        return ResponseEntity.ok("보수교육 알림 체크가 실행되었습니다.");
     }
 }

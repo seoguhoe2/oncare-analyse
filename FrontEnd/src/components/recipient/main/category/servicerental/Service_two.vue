@@ -9,7 +9,8 @@
       </div>
     </div>
 
-    <ul class="svc-card-list">
+    <!-- ✅ 목록만 스크롤 -->
+    <ul class="svc-card-list scroll-list">
       <li v-if="!beneficiaryId" class="empty">수급자를 선택해주세요.</li>
       <li v-else-if="loading" class="empty">불러오는 중...</li>
       <li v-else-if="errorMsg" class="empty">{{ errorMsg }}</li>
@@ -126,6 +127,14 @@ watch(() => [beneficiaryId.value, props.month], fetchTypes);
   margin: 0;
   padding: 0;
 }
+
+/* ✅ 스크롤바: 목록 영역에만 적용 */
+.scroll-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .svc-card {
   display: flex;
   justify-content: space-between;

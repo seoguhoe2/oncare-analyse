@@ -2,9 +2,9 @@ package org.ateam.oncare.employee.query.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.ateam.oncare.employee.command.domain.CertAndEduStatus;
-import org.ateam.oncare.employee.query.service.CertAndEduQueryService;
 import org.ateam.oncare.employee.query.dto.CertificateViewDTO;
 import org.ateam.oncare.employee.query.dto.EducationDTO;
+import org.ateam.oncare.employee.query.service.CertAndEduQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,5 +45,19 @@ public class CertAndEduQueryController {
             e.printStackTrace();
             return ResponseEntity.status(500).body("Error: " + e.getMessage() + "\n" + e.toString());
         }
+    }
+
+    // 4. 특정 자격증(Master) 보유자 목록 조회
+    // URL: GET /api/care-workers/certificates/holders/{certificateId}
+    @GetMapping("/certificates/holders/{certificateId}")
+    public ResponseEntity<List<CertificateViewDTO>> getCertificateHolders(@PathVariable Long certificateId) {
+        return ResponseEntity.ok(CertAndEduQueryService.getCertificatesByMasterId(certificateId));
+    }
+
+    // 5. 전체 자격증 종류(Master) 조회
+    // URL: GET /api/care-workers/certificates/types
+    @GetMapping("/certificates/types")
+    public ResponseEntity<List<org.ateam.oncare.employee.query.dto.CertificateMasterDTO>> getAllCertificateTypes() {
+        return ResponseEntity.ok(CertAndEduQueryService.getAllCertificates());
     }
 }

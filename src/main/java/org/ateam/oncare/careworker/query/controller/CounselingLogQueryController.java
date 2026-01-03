@@ -4,7 +4,9 @@ import org.ateam.oncare.careworker.query.dto.ApiResponse;
 import org.ateam.oncare.careworker.query.dto.CounselingLogDetailDto;
 import org.ateam.oncare.careworker.query.dto.CounselingLogListDto;
 import org.ateam.oncare.careworker.query.service.CounselingLogQueryService;
+import org.ateam.oncare.employee.command.dto.EmployeeImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,8 +21,8 @@ public class CounselingLogQueryController {
     // 1. 방문상담 목록 조회 (요양보호사별)
     @GetMapping
     public ApiResponse<List<CounselingLogListDto>> getCounselingLogList(
-            @RequestHeader("Care-Worker-Id") Long careWorkerId) {
-        List<CounselingLogListDto> data = counselingLogQueryService.getCounselingLogList(careWorkerId);
+            @AuthenticationPrincipal EmployeeImpl employee) {
+        List<CounselingLogListDto> data = counselingLogQueryService.getCounselingLogList(employee.getId());
         return ApiResponse.success(data);
     }
 
